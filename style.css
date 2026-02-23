@@ -50,13 +50,20 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
     box-shadow: 0 0 20px var(--rpg-shadow);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     box-sizing: border-box;
-    z-index: 1000;
+    z-index: 3100;
     color: var(--rpg-text);
     display: flex;
     flex-direction: column;
     overflow: visible;
     transition: width 0.3s ease, left 0.3s ease, right 0.3s ease, transform 0.3s ease;
+    backdrop-filter: blur(var(--SmartThemeBlurStrength, 10px));
 }
+
+/* Adjust top position to account for Moonlit's top bar */
+body:has(#extensionTopBar) .rpg-panel {
+    top: calc(var(--topBarBlockSize) + var(--bottomFormBlockSize, 40px) + 10px);
+}
+
 
 /* Collapsed state - fixed width for collapse */
 .rpg-panel.rpg-collapsed {
@@ -376,30 +383,23 @@ body:has(.rpg-panel.rpg-position-left) #sheld {
 }
 
 /* Custom Scrollbar */
-.rpg-panel::-webkit-scrollbar,
-#rpg-panel-content::-webkit-scrollbar,
-.rpg-content-box::-webkit-scrollbar {
+:where(.rpg-panel, #rpg-panel-content, .rpg-content-box)::-webkit-scrollbar {
     width: 0.5rem;
 }
 
-.rpg-panel::-webkit-scrollbar-track,
-#rpg-panel-content::-webkit-scrollbar-track,
-.rpg-content-box::-webkit-scrollbar-track {
+:where(.rpg-panel, #rpg-panel-content, .rpg-content-box)::-webkit-scrollbar-track {
     background: var(--rpg-accent);
 }
 
-.rpg-panel::-webkit-scrollbar-thumb,
-#rpg-panel-content::-webkit-scrollbar-thumb,
-.rpg-content-box::-webkit-scrollbar-thumb {
+:where(.rpg-panel, #rpg-panel-content, .rpg-content-box)::-webkit-scrollbar-thumb {
     background: var(--rpg-highlight);
     border-radius: 0.25em;
 }
 
-.rpg-panel::-webkit-scrollbar-thumb:hover,
-#rpg-panel-content::-webkit-scrollbar-thumb:hover,
-.rpg-content-box::-webkit-scrollbar-thumb:hover {
+:where(.rpg-panel, #rpg-panel-content, .rpg-content-box)::-webkit-scrollbar-thumb:hover {
     background: var(--rpg-border);
 }
+
 
 /* Game Container - Full height flex container */
 .rpg-game-container {
