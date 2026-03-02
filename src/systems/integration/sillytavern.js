@@ -32,6 +32,7 @@ import { renderThoughts, updateChatThoughts } from '../rendering/thoughts.js';
 import { renderQuests } from '../rendering/quests.js';
 import { updateChatSceneHeaders, resetSceneHeaderCache } from '../rendering/sceneHeaders.js';
 import { updatePortraitBar } from '../ui/portraitBar.js';
+import { updateWeatherEffect } from '../ui/weatherEffects.js';
 // Utils
 import { getSafeThumbnailUrl } from '../../utils/avatars.js';
 /**
@@ -158,11 +159,12 @@ export async function onMessageReceived(data) {
             if (parsedData.infoBox) renderInfoBox();
             if (parsedData.characterThoughts) renderThoughts();
             if (parsedData.quests) renderQuests();
-            // Scene headers & portrait bar depend on any of the above
+            // Scene headers, portrait bar & weather depend on any of the above
             const hadAnyData = parsedData.infoBox || parsedData.characterThoughts || parsedData.quests;
             if (hadAnyData) {
                 updateChatSceneHeaders();
                 updatePortraitBar();
+                updateWeatherEffect();
             }
             // Insert inline thought dropdowns into the chat message
             // (CHARACTER_MESSAGE_RENDERED fires after addOneMessage, so thoughts go in then)
@@ -200,6 +202,7 @@ export async function onMessageReceived(data) {
                 await updateRPGData(renderInfoBox, renderThoughts);
                 updateChatSceneHeaders();
                 updatePortraitBar();
+                updateWeatherEffect();
                 updateChatThoughts();
                 // Doom Counter: evaluate tension after separate mode update
                 if (extensionSettings.doomCounter?.enabled) {
@@ -266,6 +269,7 @@ export function onCharacterChanged() {
         updateChatSceneHeaders();
     }
     updatePortraitBar();
+    updateWeatherEffect();
     // Delay DOM-dependent renders — SillyTavern renders chat messages asynchronously
     // after CHAT_CHANGED fires, so #chat .mes elements may not exist yet.
     // For body-level layouts we already rendered above; still poll to catch the case
@@ -342,6 +346,7 @@ export function onMessageSwiped(messageIndex) {
     resetSceneHeaderCache();
     updateChatSceneHeaders();
     updatePortraitBar();
+    updateWeatherEffect();
     // Update chat thought overlays
     updateChatThoughts();
 }

@@ -21,14 +21,9 @@ function syncQuestsToCommittedData() {
  * @param {string} path - Item path
  * @returns {string} Lock icon HTML or empty string
  */
-function getLockIconHtml(tracker, path) {
-    const showLockIcons = extensionSettings.showLockIcons ?? true;
-    if (!showLockIcons) return '';
-    const isLocked = isItemLocked(tracker, path);
-    const lockIcon = isLocked ? '🔒' : '🔓';
-    const lockTitle = isLocked ? 'Locked' : 'Unlocked';
-    const lockedClass = isLocked ? ' locked' : '';
-    return `<span class="rpg-section-lock-icon${lockedClass}" data-tracker="${tracker}" data-path="${path}" title="${lockTitle}">${lockIcon}</span>`;
+/** @deprecated Lock UI disabled — preserved for future scene tracker integration */
+function getLockIconHtml(_tracker, _path) {
+    return '';
 }
 /**
  * HTML escape helper

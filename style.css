@@ -14892,7 +14892,9 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     flex-shrink: 0;
 }
 .dooms-ip-ticker-char-dot {
+    display: block;
     width: 7px; height: 7px;
+    flex-shrink: 0;
     border-radius: 50%;
     background: var(--st-accent, #e94560);
 }
@@ -16821,11 +16823,6 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     .dooms-dc-subtitle {
         margin-bottom: 16px;
     }
-    /* Also anchor the debug HUD to the safe area at the bottom */
-    #dooms-dc-debug-hud {
-        bottom: max(16px, env(safe-area-inset-bottom, 16px));
-        right: max(12px, env(safe-area-inset-right, 12px));
-    }
     @keyframes dooms-dc-slide-up {
         from { opacity: 0; transform: translateY(30px); }
         to { opacity: 1; transform: translateY(0); }
@@ -16911,109 +16908,6 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     position: relative;
 }
 
-/* ── Doom Counter Floating Debug HUD ── */
-#dooms-dc-debug-hud {
-    position: fixed;
-    bottom: 90px;
-    right: 16px;
-    z-index: 9000;
-    background: rgba(12, 12, 22, 0.92);
-    border: 1px solid rgba(233, 69, 96, 0.25);
-    border-radius: 10px;
-    padding: 10px 13px 11px;
-    font-size: 0.78em;
-    min-width: 148px;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
-    pointer-events: none;
-    user-select: none;
-    transition: border-color 0.3s ease;
-}
-
-#dooms-dc-debug-hud[data-status="countdown"] { border-color: rgba(240, 192, 64, 0.45); }
-#dooms-dc-debug-hud[data-status="triggered"] { border-color: rgba(233, 69, 96, 0.7); }
-#dooms-dc-debug-hud[data-status="pending"]   { border-color: rgba(240, 192, 64, 0.6); }
-
-.dooms-dc-hud-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: #e94560;
-    font-weight: 600;
-    margin-bottom: 8px;
-    padding-bottom: 7px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.dooms-dc-hud-title {
-    flex: 1;
-    letter-spacing: 0.3px;
-}
-
-/* Status dot — pulses when active */
-.dooms-dc-hud-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #444;
-    flex-shrink: 0;
-    transition: background 0.3s ease;
-}
-
-#dooms-dc-debug-hud[data-status="monitoring"] .dooms-dc-hud-dot  { background: #555; }
-#dooms-dc-debug-hud[data-status="countdown"]  .dooms-dc-hud-dot  { background: #f0c040; animation: dooms-dc-pulse 1.4s ease-in-out infinite; }
-#dooms-dc-debug-hud[data-status="triggered"]  .dooms-dc-hud-dot  { background: #e94560; animation: dooms-dc-pulse 0.7s ease-in-out infinite; }
-#dooms-dc-debug-hud[data-status="pending"]    .dooms-dc-hud-dot  { background: #f0c040; }
-
-.dooms-dc-hud-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-
-.dooms-dc-hud-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
-}
-
-.dooms-dc-hud-lbl {
-    color: #555;
-    font-size: 0.92em;
-}
-
-.dooms-dc-hud-val {
-    color: #aaa;
-    font-weight: 500;
-    font-variant-numeric: tabular-nums;
-}
-
-.dooms-dc-hud-tension-low  { color: #e94560; font-weight: 700; }
-.dooms-dc-hud-tension-high { color: #4ade80; }
-
-.dooms-dc-hud-countdown {
-    color: #f0c040;
-    font-weight: 700;
-    font-size: 1.05em;
-}
-
-.dooms-dc-hud-status-row {
-    margin-top: 3px;
-    padding-top: 6px;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-    justify-content: center;
-}
-
-.dooms-dc-hud-status-text {
-    color: #555;
-    font-size: 0.9em;
-    font-style: italic;
-}
-
-#dooms-dc-debug-hud[data-status="countdown"] .dooms-dc-hud-status-text { color: #f0c040; }
-#dooms-dc-debug-hud[data-status="triggered"] .dooms-dc-hud-status-text { color: #e94560; font-style: normal; font-weight: 600; }
-#dooms-dc-debug-hud[data-status="pending"]   .dooms-dc-hud-status-text { color: #f0c040; }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    MOBILE PERFORMANCE — disable expensive GPU effects on small screens

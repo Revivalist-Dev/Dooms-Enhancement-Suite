@@ -96,11 +96,12 @@ function buildNameLookup() {
     for (const c of chars) {
         addName(c.name);
     }
-    if (extensionSettings.knownCharacters) {
-        for (const name of Object.keys(extensionSettings.knownCharacters)) {
-            addName(name);
-        }
-    }
+    // Note: knownCharacters is intentionally NOT included here.
+    // It contains characters from ALL chats (historically seen), which causes
+    // unnamed NPCs (shopkeepers, guards, etc.) to be incorrectly attributed
+    // to named characters who aren't even in the current scene.
+    // getCharacterList() already returns both present and absent-but-known
+    // characters for the current chat, which is the correct scope.
     return map;
 }
 
@@ -339,13 +340,14 @@ function detectSpeaker(fontColor, precedingText, blockElement, colorMap, nameLoo
     const found = findClosestName(narrationOnlyText, nameLookup);
     if (found) return found;
 
-    // Strategy 5: Search backwards through previous segments in this message
+    // Strategy 5: Search backwards through RECENT segments in this message
     // for the nearest character name mention (handles cross-block references
     // where the character is named in earlier narration but not in this block).
-    // We go segment by segment from most recent, and within each segment
-    // pick the name closest to the end.
+    // Limited to the last 3 segments to avoid distant mentions claiming
+    // nearby unnamed NPC dialogue.
     if (previousSegments && previousSegments.length > 0) {
-        for (let i = previousSegments.length - 1; i >= 0; i--) {
+        const searchStart = Math.max(0, previousSegments.length - 3);
+        for (let i = previousSegments.length - 1; i >= searchStart; i--) {
             const segText = stripHtml(previousSegments[i].html);
             const segFound = findClosestName(segText, nameLookup);
             if (segFound) return segFound;
@@ -622,6 +624,20 @@ export function applyAllChatBubbles() {
     const messages = document.querySelectorAll('#chat .mes');
     for (const msg of messages) {
         applyChatBubbles(msg, style);
+    }
+}
+
+/**
+ * Revert the last AI message's bubbles back to original HTML.
+ * Must be called BEFORE SillyTavern starts a Continue/generation so it
+ * reads clean HTML instead of bubble-wrapped DOM with stripped font tags.
+ */
+export function revertLastMessageBubbles() {
+    const lastMes = document.querySelector('#chat .mes:last-child');
+    if (!lastMes) return;
+    const mesText = lastMes.querySelector('.mes_text[data-dooms-bubbles-applied]');
+    if (mesText) {
+        revertSingleMessage(mesText);
     }
 }
 

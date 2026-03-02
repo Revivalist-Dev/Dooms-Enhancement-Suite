@@ -622,75 +622,11 @@ export function updateDoomCounterUI() {
     updateDoomDebugHud();
 }
 
-// ─── Floating Debug HUD ───────────────────────────────────────────────────────
+// ─── Floating Debug HUD (removed) ─────────────────────────────────────────────
 
-/**
- * Creates or updates the floating Doom Counter debug HUD.
- * Visible in the bottom-right corner whenever debug mode is active.
- * Shows live tension, streak, countdown, and status — persists between messages.
- */
+/** @deprecated Floating HUD removed — same info lives in scene headers & settings panel. */
 export function updateDoomDebugHud() {
-    const dc = extensionSettings.doomCounter;
-    if (!dc?.enabled || !dc?.debugDisplay) {
-        hideDoomDebugHud();
-        return;
-    }
-
-    const state = getDoomCounterState();
-    const tension = readTensionValue();
-    const threshold = dc.lowTensionThreshold ?? 5;
-    const ceiling = dc.lowTensionCeiling ?? 4;
-
-    // Determine status
-    let statusClass = 'monitoring';
-    let statusText = 'Monitoring';
-    if (state.pendingTwist) {
-        statusClass = 'pending';
-        statusText = '⚡ Pending injection';
-    } else if (state.triggered) {
-        statusClass = 'triggered';
-        statusText = '☠️ Triggered!';
-    } else if (state.countdownActive) {
-        statusClass = 'countdown';
-        statusText = `⏳ Countdown`;
-    }
-
-    // Tension color class
-    const tensionClass = tension === null ? '' : (tension <= ceiling ? 'low' : 'high');
-    const tensionStr = tension !== null ? `${tension}/10` : '?/10';
-
-    // Create HUD element if it doesn't exist yet
-    let $hud = $('#dooms-dc-debug-hud');
-    if (!$hud.length) {
-        $hud = $('<div id="dooms-dc-debug-hud" class="dooms-dc-debug-hud"></div>');
-        $('body').append($hud);
-    }
-
-    $hud.attr('data-status', statusClass).html(`
-        <div class="dooms-dc-hud-header">
-            <i class="fa-solid fa-skull"></i>
-            <span class="dooms-dc-hud-title">Doom Counter</span>
-            <span class="dooms-dc-hud-dot"></span>
-        </div>
-        <div class="dooms-dc-hud-rows">
-            <div class="dooms-dc-hud-row">
-                <span class="dooms-dc-hud-lbl">Tension</span>
-                <span class="dooms-dc-hud-val dooms-dc-hud-tension-${tensionClass}">${tensionStr}</span>
-            </div>
-            <div class="dooms-dc-hud-row">
-                <span class="dooms-dc-hud-lbl">Streak</span>
-                <span class="dooms-dc-hud-val">${state.lowStreakCount} / ${threshold}</span>
-            </div>
-            ${state.countdownActive ? `
-            <div class="dooms-dc-hud-row">
-                <span class="dooms-dc-hud-lbl">Countdown</span>
-                <span class="dooms-dc-hud-val dooms-dc-hud-countdown">${state.countdownCount}</span>
-            </div>` : ''}
-            <div class="dooms-dc-hud-row dooms-dc-hud-status-row">
-                <span class="dooms-dc-hud-status-text">${statusText}</span>
-            </div>
-        </div>
-    `);
+    hideDoomDebugHud();
 }
 
 /**

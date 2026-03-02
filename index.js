@@ -86,9 +86,16 @@ import {
     applyPortraitBarSettings
 } from './src/systems/ui/portraitBar.js';
 import {
+    initWeatherEffects,
+    updateWeatherEffect,
+    toggleDynamicWeather,
+    cleanupWeatherEffects
+} from './src/systems/ui/weatherEffects.js';
+import {
     applyChatBubbles,
     applyAllChatBubbles,
     revertAllChatBubbles,
+    revertLastMessageBubbles,
     onChatBubbleModeChanged,
     applyChatBubbleSettings,
     initBubbleTtsHandlers
@@ -124,7 +131,7 @@ import {
     initDoomCounterListener
 } from './src/systems/integration/sillytavern.js';
 // Doom Counter
-import { triggerDoomCounter, updateDoomCounterUI, updateDoomDebugHud, hideDoomDebugHud, resetCounters } from './src/systems/generation/doomCounter.js';
+import { triggerDoomCounter, updateDoomCounterUI, resetCounters } from './src/systems/generation/doomCounter.js';
 // ============ DEBUG: Module loaded successfully ============
 console.log('[Dooms Tracker] ✅ All imports resolved successfully. Module body executing.');
 /**
@@ -348,11 +355,7 @@ async function initUI() {
         saveSettings();
         updateChatSceneHeaders();
     });
-    $('#rpg-toggle-lock-icons').on('change', function() {
-        extensionSettings.showLockIcons = $(this).prop('checked');
-        saveSettings();
-        updateChatSceneHeaders();
-    });
+    // Lock Icons toggle removed — lock UI disabled until wired into scene tracker
     $('#rpg-toggle-portrait-bar').on('change', function() {
         extensionSettings.showPortraitBar = $(this).prop('checked');
         saveSettings();
@@ -759,7 +762,6 @@ async function initUI() {
         const $slider = $('#rpg-dc-threshold');
         if (isDebug) {
             $slider.attr('min', 0);
-            updateDoomDebugHud();
         } else {
             $slider.attr('min', 3);
             // Clamp value back up if it was set below 3
@@ -771,7 +773,6 @@ async function initUI() {
                 $('#rpg-dc-streak-max').text(3);
                 saveSettings();
             }
-            hideDoomDebugHud();
         }
     });
 
@@ -892,6 +893,7 @@ async function initUI() {
     $('#rpg-toggle-dynamic-weather').on('change', function() {
         extensionSettings.enableDynamicWeather = $(this).prop('checked');
         saveSettings();
+        toggleDynamicWeather(extensionSettings.enableDynamicWeather);
     });
     $('#rpg-toggle-auto-avatars').on('change', function() {
         extensionSettings.autoGenerateAvatars = $(this).prop('checked');
@@ -1208,7 +1210,7 @@ async function initUI() {
     $('#rpg-toggle-info-box').prop('checked', extensionSettings.showInfoBox);
     $('#rpg-toggle-thoughts').prop('checked', extensionSettings.showCharacterThoughts);
     $('#rpg-toggle-quests').prop('checked', extensionSettings.showQuests);
-    $('#rpg-toggle-lock-icons').prop('checked', extensionSettings.showLockIcons ?? true);
+    // Lock Icons toggle removed — lock UI disabled until wired into scene tracker
     $('#rpg-toggle-portrait-bar').prop('checked', extensionSettings.showPortraitBar ?? true);
     $('#rpg-portrait-alignment').val(extensionSettings.portraitAlignment || 'left');
     $('#rpg-portrait-position').val(extensionSettings.portraitPosition || 'above');
@@ -1388,6 +1390,7 @@ async function initUI() {
     try { updateChatSceneHeaders(); console.log('[Dooms Tracker] updateChatSceneHeaders() OK'); } catch(e) { console.error('[Dooms Tracker] updateChatSceneHeaders() FAILED:', e); }
     // Info panel is now a scene tracker layout mode — no separate updateInfoPanel() needed
     try { initPortraitBar(); console.log('[Dooms Tracker] initPortraitBar() OK'); } catch(e) { console.error('[Dooms Tracker] initPortraitBar() FAILED:', e); }
+    try { initWeatherEffects(); console.log('[Dooms Tracker] initWeatherEffects() OK'); } catch(e) { console.error('[Dooms Tracker] initWeatherEffects() FAILED:', e); }
     // Add settings button as a fixed-position element on <body> so it's
     // always accessible even when the portrait bar is hidden
     if ($('#dooms-settings-fab').length === 0) {
@@ -1635,6 +1638,22 @@ jQuery(async () => {
                     }
                 }
             });
+            // ── Chat Bubbles: revert last message before Continue ──
+            // When the user hits "Continue", SillyTavern reads/modifies .mes_text
+            // to stream new content. If bubbles are active, .mes_text contains
+            // bubble-wrapped HTML with <font> tags already stripped by
+            // stripFontColors(). Reverting to the stored original (which still
+            // has <font> tags) ensures SillyTavern sees clean HTML.
+            // IMPORTANT: Only revert for 'continue' — normal generations create a
+            // NEW message element and never touch the old one, so reverting would
+            // leave the previous message without bubbles.
+            eventSource.on(event_types.GENERATION_STARTED, (type) => {
+                if (type !== 'continue') return;
+                if (!extensionSettings.enabled) return;
+                if (!extensionSettings.chatBubbleMode || extensionSettings.chatBubbleMode === 'off') return;
+                revertLastMessageBubbles();
+            });
+
             // ── Chat Bubbles: apply per-character bubbles to messages ──
             eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (messageId) => {
                 if (!extensionSettings.enabled) return;

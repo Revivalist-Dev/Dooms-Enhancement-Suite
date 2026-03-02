@@ -5,8 +5,9 @@
  *
  * Portrait lookup priority:
  *   1. npcAvatars (base64 data URI stored in extensionSettings — shared with thoughts panel)
- *   2. Local `portraits/` folder (e.g. portraits/Lyra.png)
- *   3. Character emoji fallback
+ *   2. SillyTavern character card avatars (group members → all characters → current character)
+ *   3. Local `portraits/` folder (e.g. portraits/Lyra.png)
+ *   4. Character emoji fallback
  *
  * Right-clicking a portrait card opens a context menu with "Upload Portrait"
  * and "Remove Portrait" options.
@@ -16,9 +17,20 @@ import { extensionFolderPath } from '../../core/config.js';
 import { saveSettings } from '../../core/persistence.js';
 import { callGenericPopup, POPUP_TYPE } from '../../../../../../popup.js';
 import { getBase64Async } from '../../../../../../utils.js';
+import { this_chid, characters } from '../../../../../../../script.js';
+import { selected_group, getGroupMembers } from '../../../../../../group-chats.js';
+import { getSafeThumbnailUrl } from '../../utils/avatars.js';
 
 /** Supported image extensions to probe for, in priority order */
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
+
+/** Palette of dialogue colors auto-assigned to new characters */
+const DIALOGUE_COLORS = [
+    '#e94560', '#e07b39', '#f0c040', '#2ecc71',
+    '#1abc9c', '#4a7ba7', '#9b59b6', '#e84393',
+    '#5dade2', '#f39c12', '#8e44ad', '#d35400',
+    '#16a085', '#c0392b',
+];
 
 // ─────────────────────────────────────────────
 //  Settings → CSS custom properties
@@ -368,6 +380,24 @@ export function updatePortraitBar() {
         }
     }
 
+    // ── Auto-assign dialogue colors to characters that don't have one yet ──
+    if (!extensionSettings.characterColors) extensionSettings.characterColors = {};
+    const usedColors = new Set(Object.values(extensionSettings.characterColors));
+    let colorsAssigned = false;
+    for (const char of characters) {
+        if (!extensionSettings.characterColors[char.name]) {
+            // Pick the first unused palette color; fall back to random if all taken
+            let color = DIALOGUE_COLORS.find(c => !usedColors.has(c));
+            if (!color) {
+                color = DIALOGUE_COLORS[Math.floor(Math.random() * DIALOGUE_COLORS.length)];
+            }
+            extensionSettings.characterColors[char.name] = color;
+            usedColors.add(color);
+            colorsAssigned = true;
+        }
+    }
+    if (colorsAssigned) saveSettings();
+
     const cards = characters.map((char, idx) => {
         const portraitSrc = resolvePortrait(char.name);
         const speakingClass = (char.present && idx === 0) ? ' dooms-pb-speaking' : '';
@@ -488,30 +518,73 @@ export function repositionPortraitBar() {
 }
 
 // ─────────────────────────────────────────────
-//  Portrait resolution (npcAvatars → file → null)
+//  Portrait resolution (npcAvatars → ST characters → file → null)
 // ─────────────────────────────────────────────
 
 /**
+ * Fuzzy-match a SillyTavern character card name against an AI-generated name.
+ * Tries exact, parenthesis-stripped, and word-boundary matching.
+ */
+function namesMatch(cardName, aiName) {
+    if (!cardName || !aiName) return false;
+    if (cardName.toLowerCase() === aiName.toLowerCase()) return true;
+    const stripParens = (s) => s.replace(/\s*\([^)]*\)/g, '').trim();
+    const cardCore = stripParens(cardName).toLowerCase();
+    const aiCore = stripParens(aiName).toLowerCase();
+    if (cardCore === aiCore) return true;
+    const escapedCardCore = cardCore.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${escapedCardCore}\\b`).test(aiCore);
+}
+
+/**
  * Returns the best available portrait source for a character.
- * Priority: npcAvatars base64 → portraits/ folder file → null
+ * Priority: npcAvatars base64 → ST character card avatar → portraits/ folder → null
  */
 export function resolvePortrait(name) {
     if (!name) return null;
 
+    // 1. Custom uploaded avatars (npcAvatars)
     const avatars = extensionSettings.npcAvatars;
     if (avatars) {
-        // 1. Exact match
+        // Exact match
         if (avatars[name]) return avatars[name];
 
-        // 2. Partial match — handle short names that have since been expanded to full names
-        //    e.g. "Sakura" → "Sakura Ashenveil", "Satori" → "Satori Thornblood"
-        //    Only matches when the lookup name is a complete first word of the stored key
+        // Partial match — handle short names expanded to full names
+        // e.g. "Sakura" → "Sakura Ashenveil"
         const lowerName = name.toLowerCase();
         for (const key of Object.keys(avatars)) {
             if (key.toLowerCase().startsWith(lowerName + ' ')) {
                 return avatars[key];
             }
         }
+    }
+
+    // 2. SillyTavern character card avatars (group members first, then all)
+    try {
+        if (selected_group) {
+            const groupMembers = getGroupMembers(selected_group);
+            if (groupMembers?.length) {
+                const match = groupMembers.find(m => m?.name && namesMatch(m.name, name));
+                if (match?.avatar && match.avatar !== 'none') {
+                    const url = getSafeThumbnailUrl('avatar', match.avatar);
+                    if (url) return url;
+                }
+            }
+        }
+        if (characters?.length) {
+            const match = characters.find(c => c?.name && namesMatch(c.name, name));
+            if (match?.avatar && match.avatar !== 'none') {
+                const url = getSafeThumbnailUrl('avatar', match.avatar);
+                if (url) return url;
+            }
+        }
+        if (this_chid !== undefined && characters[this_chid]?.name &&
+            namesMatch(characters[this_chid].name, name)) {
+            const url = getSafeThumbnailUrl('avatar', characters[this_chid].avatar);
+            if (url) return url;
+        }
+    } catch (e) {
+        console.warn('[Dooms Portrait Bar] Character card avatar lookup failed:', e.message);
     }
 
     // 3. Check file-based portraits/ folder
