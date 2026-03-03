@@ -257,6 +257,22 @@ export function loadSettings() {
                 extensionSettings.settingsVersion = 10;
                 settingsChanged = true;
             }
+            // Migration to version 11: Ensure weather and temperature widgets exist in trackerConfig
+            // These fields were missing from buildInfoBoxJSONInstruction(), so existing users
+            // may not have them in their saved widget config even though the defaults include them.
+            if (currentVersion < 11) {
+                const widgets = extensionSettings.trackerConfig?.infoBox?.widgets;
+                if (widgets) {
+                    if (!widgets.weather) {
+                        widgets.weather = { enabled: true, persistInHistory: true };
+                    }
+                    if (!widgets.temperature) {
+                        widgets.temperature = { enabled: true, unit: 'C', persistInHistory: false };
+                    }
+                }
+                extensionSettings.settingsVersion = 11;
+                settingsChanged = true;
+            }
 
             // Save migrated settings
             if (settingsChanged) {

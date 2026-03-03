@@ -3,12 +3,48 @@
    When the virtual keyboard opens/closes on mobile, the viewport height changes
    and transitions / animations try to smoothly interpolate viewport-relative
    properties, causing a slow rubber-band effect.  This class is held for ~500ms
-   by a resize listener in index.js so the layout snaps instantly. */
-body.dooms-vk-resizing,
-body.dooms-vk-resizing * {
+   by a resize listener in index.js so the layout snaps instantly.
+   PERF: Scoped to Dooms extension elements + SillyTavern's input area — avoids
+   the old universal * selector that caused full-DOM style invalidation (~60/sec). */
+body.dooms-vk-resizing [class*="dooms-"],
+body.dooms-vk-resizing [class*="rpg-"],
+body.dooms-vk-resizing #dooms-tracker-panel,
+body.dooms-vk-resizing #dooms-tracker-panel *,
+body.dooms-vk-resizing .rpg-weather-particles,
+body.dooms-vk-resizing .rpg-weather-particles *,
+/* SillyTavern input area — #send_textarea has clip-path transition,
+   buttons have opacity transitions, .drag-grabber has transition: all.
+   These cause the chat bar to rubber-band instead of snapping to keyboard. */
+body.dooms-vk-resizing #form_sheld,
+body.dooms-vk-resizing #form_sheld *,
+body.dooms-vk-resizing #sheld,
+body.dooms-vk-resizing .drag-grabber {
     transition: none !important;
     animation-duration: 0s !important;
     animation-delay: 0s !important;
+}
+/* Hide weather particles entirely during keyboard resize — avoids expensive
+   recompositing of fixed+animated elements while viewport is changing */
+body.dooms-vk-resizing .rpg-weather-particles {
+    visibility: hidden !important;
+}
+/* ── Critical mobile keyboard layout fix ──
+   #sheld uses 100dvh (shrinks with keyboard) but #chat uses 100vh for max-height
+   (does NOT shrink with keyboard).  When the keyboard opens, the flex layout has to
+   resolve the conflict between #chat wanting its full 100vh height and #sheld being
+   smaller.  With hundreds of flex-child messages, this intrinsic size calculation
+   can take 5-10+ seconds.
+   Fix: force #chat to have min-height: 0 (flex shrink baseline) and contain: strict
+   during resize so the browser can skip intrinsic sizing of every chat message. */
+body.dooms-vk-resizing #chat {
+    min-height: 0 !important;
+    contain: strict !important;
+}
+/* Also force #chat to use a sane flex-basis so it doesn't fight the parent */
+@media (max-width: 1000px) {
+    #chat {
+        min-height: 0;
+    }
 }
 
 /* Doom icon - inline SVG mask icon */
@@ -11273,6 +11309,8 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
     pointer-events: none;
     z-index: 1;
     overflow: hidden;
+    contain: strict;
+    will-change: transform;
 }
 
 /* Base particle */
@@ -12479,6 +12517,8 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
     position: fixed;
     pointer-events: none;
     z-index: 9998;
+    contain: layout style;
+    will-change: transform;
 }
 
 /* Hide FAB widgets on desktop viewport */
@@ -13485,6 +13525,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
     overflow: hidden;
     flex-shrink: 0;
+    contain: layout style;
 }
 
 /* Expanded state */
@@ -13560,7 +13601,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
 .dooms-pb-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 6px;
     margin-bottom: 6px;
     padding: 0 4px;
 }
@@ -13582,6 +13623,81 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     background: rgba(255,255,255,0.04);
     padding: 1px 6px;
     border-radius: 8px;
+    margin-left: auto;
+}
+
+/* Restore removed characters button */
+.dooms-pb-restore-btn {
+    background: none;
+    border: 1px solid rgba(100, 200, 100, 0.3);
+    color: rgba(100, 200, 100, 0.7);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 0.6em;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+}
+.dooms-pb-restore-btn:hover {
+    color: rgba(100, 200, 100, 1);
+    border-color: rgba(100, 200, 100, 0.6);
+}
+
+/* Restore popup */
+.dooms-pb-restore-popup {
+    position: fixed;
+    z-index: 10001;
+    background: rgba(20, 20, 30, 0.97);
+    border: 1px solid rgba(100, 200, 100, 0.3);
+    border-radius: 8px;
+    padding: 8px;
+    min-width: 180px;
+    max-width: 280px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+.dooms-pb-restore-header {
+    font-size: 0.75em;
+    color: rgba(100, 200, 100, 0.8);
+    padding: 2px 4px 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    margin-bottom: 4px;
+}
+.dooms-pb-restore-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 6px;
+    font-size: 0.75em;
+    color: #ccc;
+    border-radius: 4px;
+}
+.dooms-pb-restore-item:hover { background: rgba(255,255,255,0.05); }
+.dooms-pb-restore-item-btn {
+    background: none;
+    border: none;
+    color: rgba(100, 200, 100, 0.7);
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 1em;
+}
+.dooms-pb-restore-item-btn:hover { color: rgba(100, 200, 100, 1); }
+.dooms-pb-restore-footer {
+    border-top: 1px solid rgba(255,255,255,0.08);
+    margin-top: 4px;
+    padding-top: 6px;
+    text-align: center;
+}
+.dooms-pb-restore-all-btn {
+    background: rgba(100, 200, 100, 0.15);
+    border: 1px solid rgba(100, 200, 100, 0.3);
+    color: rgba(100, 200, 100, 0.8);
+    border-radius: 4px;
+    padding: 3px 12px;
+    font-size: 0.7em;
+    cursor: pointer;
+}
+.dooms-pb-restore-all-btn:hover {
+    background: rgba(100, 200, 100, 0.25);
+    color: rgba(100, 200, 100, 1);
 }
 
 /* Scroll container */
@@ -16915,8 +17031,9 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
    this is devastating.  The elements already have near-opaque backgrounds so
    removing the blur is visually negligible.
    ═══════════════════════════════════════════════════════════════════════════════ */
-@media (max-width: 768px) {
-    /* ── Kill backdrop-filter on mobile ── */
+@media (max-width: 1000px) {
+    /* ── Kill backdrop-filter on mobile / tablet ──
+       Breakpoint matches the mobile toggle threshold used in mobile.js */
     .rpg-dice-popup::before,
     .rpg-settings-popup::before,
     .rpg-panel-header,
@@ -16935,6 +17052,7 @@ body:has(.rpg-panel[data-theme="light"]) .rpg-strip-widget {
     .rpg-st-inline-row,
     .dooms-intro-overlay,
     .dooms-dc-overlay,
+    .rpg-fab-widget,
     #dooms-dc-debug-hud {
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;

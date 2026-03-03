@@ -289,8 +289,9 @@ export function setupMobileToggle() {
     $(window).on('resize', function() {
         clearTimeout(resizeTimer);
         const isMobile = window.innerWidth <= 1000;
-        const $panel = $('#dooms-tracker-panel');
-        const $mobileToggle = $('#rpg-mobile-toggle');
+        // Fast path: if mobile state hasn't changed (e.g. keyboard open/close),
+        // skip all the transition logic — no DOM queries, no layout reads.
+        if (isMobile === wasMobile) return;
         // Transitioning from desktop to mobile - handle immediately for smooth transition
         if (!wasMobile && isMobile) {
             // Show mobile toggle button
@@ -564,24 +565,30 @@ export function setupMobileKeyboardHandling() {
     }
     const $panel = $('#dooms-tracker-panel');
     let keyboardVisible = false;
+    let kbRafId = null;
     // Listen for viewport resize (keyboard show/hide)
+    // Throttled to one check per animation frame to avoid per-frame layout reads
     window.visualViewport.addEventListener('resize', () => {
-        // Only handle if panel is open on mobile
-        if (!$panel.hasClass('rpg-mobile-open')) return;
-        const viewportHeight = window.visualViewport.height;
-        const windowHeight = window.innerHeight;
-        // Keyboard visible if viewport significantly smaller than window
-        // Using 75% threshold to account for browser UI variations
-        const isKeyboardShowing = viewportHeight < windowHeight * 0.75;
-        if (isKeyboardShowing && !keyboardVisible) {
-            // Keyboard just appeared
-            keyboardVisible = true;
-            $panel.addClass('rpg-keyboard-visible');
-        } else if (!isKeyboardShowing && keyboardVisible) {
-            // Keyboard just disappeared
-            keyboardVisible = false;
-            $panel.removeClass('rpg-keyboard-visible');
-        }
+        if (kbRafId) return; // Already scheduled
+        kbRafId = requestAnimationFrame(() => {
+            kbRafId = null;
+            // Only handle if panel is open on mobile
+            if (!$panel.hasClass('rpg-mobile-open')) return;
+            const viewportHeight = window.visualViewport.height;
+            const windowHeight = window.innerHeight;
+            // Keyboard visible if viewport significantly smaller than window
+            // Using 75% threshold to account for browser UI variations
+            const isKeyboardShowing = viewportHeight < windowHeight * 0.75;
+            if (isKeyboardShowing && !keyboardVisible) {
+                // Keyboard just appeared
+                keyboardVisible = true;
+                $panel.addClass('rpg-keyboard-visible');
+            } else if (!isKeyboardShowing && keyboardVisible) {
+                // Keyboard just disappeared
+                keyboardVisible = false;
+                $panel.removeClass('rpg-keyboard-visible');
+            }
+        });
     });
 }
 /**

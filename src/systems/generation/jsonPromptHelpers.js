@@ -5,6 +5,7 @@
 import { extensionSettings, committedTrackerData } from '../../core/state.js';
 import { getContext } from '../../../../../../extensions.js';
 import { i18n } from '../../core/i18n.js';
+import { getWeatherKeywordsAsPromptString } from '../ui/weatherEffects.js';
 /**
  * Converts a field name to snake_case for use as JSON key
  * Example: "Test Tracker" -> "test_tracker"
@@ -75,6 +76,16 @@ export function buildInfoBoxJSONInstruction() {
     }
     if (widgets.location?.enabled) {
         instruction += (hasFields ? ',\n' : '') + '  "location": {"value": "Location"}';
+        hasFields = true;
+    }
+    if (widgets.weather?.enabled) {
+        const keywordsHint = getWeatherKeywordsAsPromptString('en');
+        instruction += (hasFields ? ',\n' : '') + `  "weather": {"emoji": "Weather Emoji", "forecast": "Current weather conditions. ${keywordsHint}"}`;
+        hasFields = true;
+    }
+    if (widgets.temperature?.enabled) {
+        const unit = widgets.temperature.unit || 'C';
+        instruction += (hasFields ? ',\n' : '') + `  "temperature": {"value": <number>, "unit": "${unit}"}`;
         hasFields = true;
     }
     if (widgets.recentEvents?.enabled) {

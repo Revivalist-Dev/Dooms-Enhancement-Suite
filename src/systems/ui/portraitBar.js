@@ -149,6 +149,9 @@ export function initPortraitBar() {
                 <div class="dooms-pb-header">
                     <span class="dooms-pb-title"><i class="fa-solid fa-users"></i> Present Characters</span>
                     <span class="dooms-pb-count" id="dooms-pb-count">0 characters</span>
+                    <button class="dooms-pb-restore-btn" id="dooms-pb-restore-btn" title="Restore removed characters" style="display:none;">
+                        <i class="fa-solid fa-user-plus"></i>
+                    </button>
                 </div>
                 <button class="dooms-pb-arrow dooms-pb-left" id="dooms-pb-left"><i class="fa-solid fa-chevron-left"></i></button>
                 <button class="dooms-pb-arrow dooms-pb-right" id="dooms-pb-right"><i class="fa-solid fa-chevron-right"></i></button>
@@ -324,6 +327,57 @@ export function initPortraitBar() {
         hideContextMenu();
     });
 
+    // ── Restore removed characters button ──
+    $('#dooms-pb-restore-btn').on('click', function (e) {
+        e.stopPropagation();
+        const removed = extensionSettings.removedCharacters || [];
+        if (removed.length === 0) return;
+
+        // Build a simple popup list
+        const listHtml = removed.map(name =>
+            `<div class="dooms-pb-restore-item" data-name="${escapeHtml(name)}">
+                <span>${escapeHtml(name)}</span>
+                <button class="dooms-pb-restore-item-btn" title="Restore"><i class="fa-solid fa-rotate-left"></i></button>
+            </div>`
+        ).join('');
+        const $popup = $(`<div class="dooms-pb-restore-popup">
+            <div class="dooms-pb-restore-header">Removed Characters</div>
+            ${listHtml}
+            <div class="dooms-pb-restore-footer">
+                <button class="dooms-pb-restore-all-btn">Restore All</button>
+            </div>
+        </div>`);
+
+        // Position near the button
+        const btnOffset = $(this).offset();
+        $popup.css({ top: btnOffset.top + 28, left: btnOffset.left - 100 });
+        $('body').append($popup);
+
+        // Restore single
+        $popup.on('click', '.dooms-pb-restore-item-btn', function () {
+            const name = $(this).closest('.dooms-pb-restore-item').data('name');
+            restoreCharacter(name);
+            $(this).closest('.dooms-pb-restore-item').fadeOut(200, function () { $(this).remove(); });
+            if ($popup.find('.dooms-pb-restore-item').length <= 1) {
+                $popup.remove();
+            }
+        });
+
+        // Restore all
+        $popup.on('click', '.dooms-pb-restore-all-btn', function () {
+            extensionSettings.removedCharacters = [];
+            saveSettings();
+            $popup.remove();
+            updatePortraitBar();
+            console.log('[Dooms Portrait Bar] All removed characters restored');
+        });
+
+        // Dismiss on outside click
+        setTimeout(() => {
+            $(document).one('click.dooms-pb-restore', function () { $popup.remove(); });
+        }, 0);
+    });
+
     // Initial render
     updatePortraitBar();
 }
@@ -361,6 +415,11 @@ export function updatePortraitBar() {
         ? `${totalCount} ${totalCount === 1 ? 'character' : 'characters'}`
         : `${presentCount} present / ${totalCount} known`;
     $('#dooms-pb-count').text(countText);
+
+    // Show/hide restore button based on whether there are removed characters
+    const removedCount = (extensionSettings.removedCharacters || []).length;
+    $('#dooms-pb-restore-btn').toggle(removedCount > 0)
+        .attr('title', `Restore removed characters (${removedCount})`);
 
     if (totalCount === 0) {
         $scroll.html('<div class="dooms-pb-empty">No characters present</div>');
@@ -599,6 +658,16 @@ function getPortraitFileUrl(name) {
         return portraitFileCache.get(name);
     }
 
+    // Check persistent no-portrait cache before firing any network requests.
+    // This prevents 5+ HEAD 404s per character on every page reload.
+    try {
+        const noPortrait = JSON.parse(localStorage.getItem('dooms-portrait-no-file') || '[]');
+        if (noPortrait.includes(name)) {
+            portraitFileCache.set(name, null);
+            return null;
+        }
+    } catch (e) { /* ignore */ }
+
     const sanitizedName = sanitizeFilename(name);
     const basePath = `/${extensionFolderPath}/portraits/${sanitizedName}`;
     const url = `${basePath}.png`;
@@ -761,6 +830,23 @@ function clearCharacterColor(characterName) {
 /**
  * Removes a character from the known-characters roster (and their portrait if any).
  */
+function restoreCharacter(characterName) {
+    if (!extensionSettings.removedCharacters) return;
+    const lowerName = characterName.toLowerCase();
+    extensionSettings.removedCharacters = extensionSettings.removedCharacters.filter(
+        n => n.toLowerCase() !== lowerName
+    );
+    // Clear the no-portrait cache so file probing can resume
+    portraitFileCache.delete(characterName);
+    try {
+        const noPortrait = JSON.parse(localStorage.getItem('dooms-portrait-no-file') || '[]');
+        localStorage.setItem('dooms-portrait-no-file', JSON.stringify(noPortrait.filter(n => n !== characterName)));
+    } catch (e) { /* ignore */ }
+    saveSettings();
+    updatePortraitBar();
+    console.log(`[Dooms Portrait Bar] Character restored: ${characterName}`);
+}
+
 function removeCharacter(characterName) {
     // Add to removed-characters blacklist so getCharacterList() filters them out
     if (!extensionSettings.removedCharacters) {
@@ -769,13 +855,23 @@ function removeCharacter(characterName) {
     if (!extensionSettings.removedCharacters.includes(characterName)) {
         extensionSettings.removedCharacters.push(characterName);
     }
-    // Remove from known characters roster
-    if (extensionSettings.knownCharacters && extensionSettings.knownCharacters[characterName]) {
-        delete extensionSettings.knownCharacters[characterName];
+    // Remove from known characters roster (case-insensitive — AI name variants)
+    if (extensionSettings.knownCharacters) {
+        const lowerName = characterName.toLowerCase();
+        for (const key of Object.keys(extensionSettings.knownCharacters)) {
+            if (key.toLowerCase() === lowerName) {
+                delete extensionSettings.knownCharacters[key];
+            }
+        }
     }
-    // Also remove their portrait if one exists
-    if (extensionSettings.npcAvatars && extensionSettings.npcAvatars[characterName]) {
-        delete extensionSettings.npcAvatars[characterName];
+    // Also remove their portrait if one exists (case-insensitive)
+    if (extensionSettings.npcAvatars) {
+        const lowerName = characterName.toLowerCase();
+        for (const key of Object.keys(extensionSettings.npcAvatars)) {
+            if (key.toLowerCase() === lowerName) {
+                delete extensionSettings.npcAvatars[key];
+            }
+        }
     }
     // Remove from entrance animation tracking so they don't re-trigger
     _previousCharacterNames.delete(characterName);
@@ -819,7 +915,11 @@ export function getCharacterList() {
                 .filter(c => {
                     // Filter out characters whose thoughts indicate they're off-scene
                     const thoughts = c.thoughts?.content || c.thoughts || '';
-                    return !thoughts || !offScenePatterns.test(thoughts);
+                    if (thoughts && offScenePatterns.test(thoughts)) {
+                        console.log(`[Dooms Portrait Bar] Filtered off-scene: ${c.name}`);
+                        return false;
+                    }
+                    return true;
                 })
                 .map(c => ({
                     name: c.name || 'Unknown',
@@ -840,9 +940,20 @@ export function getCharacterList() {
     }
 
     // Filter out characters the user has explicitly removed
+    // Case-insensitive matching — AI may output name variants between generations
     const removed = extensionSettings.removedCharacters || [];
-    const removedSet = new Set(removed);
-    presentChars = presentChars.filter(c => !removedSet.has(c.name));
+    const removedLower = new Set(removed.map(n => n.toLowerCase()));
+    const beforeRemoval = presentChars.length;
+    presentChars = presentChars.filter(c => {
+        if (removedLower.has(c.name.toLowerCase())) {
+            console.log(`[Dooms Portrait Bar] Filtered removed character: ${c.name}`);
+            return false;
+        }
+        return true;
+    });
+    if (beforeRemoval !== presentChars.length) {
+        console.log(`[Dooms Portrait Bar] removedCharacters list:`, removed);
+    }
 
     // Update the persistent known-characters roster
     if (!extensionSettings.knownCharacters) {
@@ -866,7 +977,7 @@ export function getCharacterList() {
     const presentNames = new Set(presentChars.map(c => c.name));
     const absentChars = [];
     for (const [name, info] of Object.entries(extensionSettings.knownCharacters)) {
-        if (!presentNames.has(name) && !removedSet.has(name)) {
+        if (!presentNames.has(name) && !removedLower.has(name.toLowerCase())) {
             absentChars.push({ name, emoji: info.emoji || '👤', present: false });
         }
     }

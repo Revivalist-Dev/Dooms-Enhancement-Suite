@@ -1482,18 +1482,27 @@ jQuery(async () => {
         // for the keyboard animation + browser reflow to fully complete.
         try {
             let vkTimer;
+            let vkActive = false;
             const killTransitions = () => {
-                document.body.classList.add('dooms-vk-resizing');
+                // Apply the class synchronously on the FIRST fire so transitions
+                // are killed before the browser can start a transitioning layout.
+                // Subsequent fires during the same keyboard animation are no-ops
+                // (classList.add is idempotent and vkActive skips the timer reset).
+                if (!vkActive) {
+                    vkActive = true;
+                    document.body.classList.add('dooms-vk-resizing');
+                }
                 clearTimeout(vkTimer);
-                // 500ms covers the keyboard close animation (~300ms) plus one
+                // 600ms covers the keyboard animation (~300-400ms) plus one
                 // full reflow cycle.  We only re-enable after a full rAF so the
                 // browser has actually painted the new layout before transitions
                 // can kick in again.
                 vkTimer = setTimeout(() => {
                     requestAnimationFrame(() => {
+                        vkActive = false;
                         document.body.classList.remove('dooms-vk-resizing');
                     });
-                }, 500);
+                }, 600);
             };
             // visualViewport fires during the keyboard animation itself
             if (window.visualViewport) {
@@ -1501,6 +1510,20 @@ jQuery(async () => {
             }
             // window resize fires as a fallback / when visualViewport isn't available
             window.addEventListener('resize', killTransitions);
+
+            // ── Force textarea into view on keyboard open ──
+            // On mobile, the #chat flex child (100s of messages) can take seconds
+            // to reflow when #sheld shrinks.  Belt-and-suspenders: after the
+            // keyboard animation settles, explicitly scroll the focused textarea
+            // into view so users can type immediately.
+            const $textarea = document.getElementById('send_textarea');
+            if ($textarea && window.innerWidth <= 1000) {
+                $textarea.addEventListener('focus', () => {
+                    setTimeout(() => {
+                        $textarea.scrollIntoView({ behavior: 'instant', block: 'end' });
+                    }, 350);
+                });
+            }
         } catch (error) {
             console.error('[Dooms Tracker] Viewport resize listener failed:', error);
         }
