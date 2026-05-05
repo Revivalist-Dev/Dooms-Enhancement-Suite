@@ -3,7 +3,7 @@
  * Handles injection of RPG tracker prompts into the generation context
  */
 import { getContext } from '../../../../../../extensions.js';
-import { extension_prompt_types, extension_prompt_roles, setExtensionPrompt, eventSource, event_types, chat_metadata } from '../../../../../../../script.js';
+import { extension_prompt_types, extension_prompt_roles, setExtensionPrompt, eventSource, event_types } from '../../../../../../../script.js';
 import {
     extensionSettings,
     committedTrackerData,
@@ -668,20 +668,6 @@ export async function onGenerationStarted(type, data, dryRun) {
     // patterns inside evaluateSuppression.
     const suppression = evaluateSuppression(extensionSettings, context, data, type);
     const { shouldSuppress, skipMode, isGuidedGeneration, isImpersonationGeneration, hasQuietPrompt, instructContent, quietPromptRaw, matchedPattern, activeInjectIds } = suppression;
-    // ── DIAGNOSTIC (1.10.7-debug): show the suppression decision for every
-    // real generation so users reporting "Skip Injections didn't suppress"
-    // can attach a System Log bundle that pins down which gate closed.
-    // Remove once the impersonation/guided-swipe suppression behavior is
-    // settled in production.
-    let _allInjectKeys = [];
-    try {
-        const _injects = chat_metadata?.script_injects
-            || context?.chat_metadata?.script_injects
-            || context?.chatMetadata?.script_injects
-            || {};
-        _allInjectKeys = Object.keys(_injects);
-    } catch (e) { _allInjectKeys = ['(threw)']; }
-    console.log(`[DES Suppression] type=${type || '(unset)'} skipMode=${skipMode} isGuided=${isGuidedGeneration} isImpersonation=${isImpersonationGeneration} hasQuietPrompt=${hasQuietPrompt} matched=${matchedPattern || '(none)'} activeInjectIds=[${(activeInjectIds || []).join(',')}] allScriptInjectKeys=[${_allInjectKeys.join(',')}] → shouldSuppress=${shouldSuppress}`);
     if (shouldSuppress) {
         // Debugging: indicate active suppression and which source triggered it
         console.debug(`[Dooms Tracker] Suppression active (mode=${skipMode}). isGuided=${isGuidedGeneration}, isImpersonation=${isImpersonationGeneration}, hasQuietPrompt=${hasQuietPrompt} - skipping RPG tracker injections for this generation.`);
@@ -987,26 +973,13 @@ function onGenerationAfterCommands() {
 
     const context = getContext();
     const suppression = evaluateSuppression(extensionSettings, context, data, type);
-    const { shouldSuppress, skipMode, isGuidedGeneration, isImpersonationGeneration, hasQuietPrompt, matchedPattern, activeInjectIds } = suppression;
-
-    // Diagnostic mirror of the GENERATION_STARTED log so testers can confirm
-    // the late check fired. Remove alongside the STARTED diagnostic once the
-    // race fix is settled in production.
-    let _allInjectKeys = [];
-    try {
-        const _injects = chat_metadata?.script_injects
-            || context?.chat_metadata?.script_injects
-            || context?.chatMetadata?.script_injects
-            || {};
-        _allInjectKeys = Object.keys(_injects);
-    } catch (e) { _allInjectKeys = ['(threw)']; }
-    console.log(`[DES Suppression] (after-commands) type=${type || '(unset)'} skipMode=${skipMode} isGuided=${isGuidedGeneration} isImpersonation=${isImpersonationGeneration} hasQuietPrompt=${hasQuietPrompt} matched=${matchedPattern || '(none)'} activeInjectIds=[${(activeInjectIds || []).join(',')}] allScriptInjectKeys=[${_allInjectKeys.join(',')}] → shouldSuppress=${shouldSuppress}`);
+    const { shouldSuppress, skipMode, matchedPattern } = suppression;
 
     if (!shouldSuppress) return;
     // Already suppressed at GENERATION_STARTED — nothing left to clear.
     if (currentSuppressionState) return;
 
-    console.log(`[DES Suppression] late-suppress fired (mode=${skipMode}, matched=${matchedPattern || '(none)'}) — clearing tracker prompts after slash queue drained.`);
+    console.debug(`[Dooms Tracker] Late suppression fired at GENERATION_AFTER_COMMANDS (mode=${skipMode}, matched=${matchedPattern || '(none)'}) — clearing tracker prompts after slash queue drained.`);
     setExtensionPrompt('dooms-tracker-inject', '', extension_prompt_types.IN_CHAT, 0, false);
     setExtensionPrompt('dooms-tracker-example', '', extension_prompt_types.IN_CHAT, 0, false);
     setExtensionPrompt('dooms-tracker-html', '', extension_prompt_types.IN_CHAT, 0, false);
