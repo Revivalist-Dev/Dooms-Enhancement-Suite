@@ -9,8 +9,9 @@
  *   3. Local `portraits/` folder (e.g. portraits/Lyra.png)
  *   4. Character emoji fallback
  *
- * Right-clicking a portrait card opens a context menu with "Upload Portrait"
- * and "Remove Portrait" options.
+ * Right-clicking a portrait card opens a context menu with workshop /
+ * roster actions; portrait upload + dialogue color editing live in the
+ * Workshop now.
  */
 import { extensionSettings, lastGeneratedData, committedTrackerData, FALLBACK_AVATAR_DATA_URI, getSyncedExpressionLabel } from '../../core/state.js';
 import { extensionFolderPath } from '../../core/config.js';
@@ -193,19 +194,8 @@ export function initPortraitBar() {
                 <i class="fa-solid fa-ban"></i> Cancel Injection
             </div>
             <div class="dooms-pb-ctx-divider"></div>
-            <div class="dooms-pb-ctx-item" data-action="upload">
-                <i class="fa-solid fa-image"></i> Upload Portrait
-            </div>
             <div class="dooms-pb-ctx-item" data-action="remove">
                 <i class="fa-solid fa-trash-can"></i> Remove Portrait
-            </div>
-            <div class="dooms-pb-ctx-divider"></div>
-            <div class="dooms-pb-ctx-item dooms-pb-ctx-color" data-action="set-color">
-                <i class="fa-solid fa-palette"></i> Set Dialogue Color
-                <input type="color" id="dooms-pb-color-input" class="dooms-pb-color-input" />
-            </div>
-            <div class="dooms-pb-ctx-item" data-action="clear-color">
-                <i class="fa-solid fa-eraser"></i> Clear Dialogue Color
             </div>
             <div class="dooms-pb-ctx-divider"></div>
             <div class="dooms-pb-ctx-item" data-action="character-sheet">
@@ -326,12 +316,6 @@ export function initPortraitBar() {
         const hasCustomAvatar = extensionSettings.npcAvatars && extensionSettings.npcAvatars[characterName];
         $menu.find('[data-action="remove"]').toggle(!!hasCustomAvatar);
 
-        // Set color picker to current character color (or default white)
-        const ctxColors = getActiveCharacterColors();
-        const currentColor = ctxColors[characterName] || '#ffffff';
-        $menu.find('#dooms-pb-color-input').val(currentColor);
-        // Show or hide "Clear Dialogue Color" based on whether one is set
-        $menu.find('[data-action="clear-color"]').toggle(!!ctxColors[characterName]);
         // Show "Character Sheet" only when Bunny Mo integration is enabled
         $menu.find('[data-action="character-sheet"]').toggle(!!extensionSettings.bunnyMoIntegration);
         // Show "Open in Workshop" unless explicitly disabled via feature flag.
@@ -367,24 +351,13 @@ export function initPortraitBar() {
         const action = $(this).data('action');
         const characterName = $('#dooms-pb-context-menu').data('character');
 
-        // "Set Dialogue Color" — open the native color picker, don't close menu yet
-        if (action === 'set-color') {
-            e.stopPropagation();
-            $('#dooms-pb-color-input')[0].click();
-            return;
-        }
-
         hideContextMenu();
         if (!characterName) return;
 
-        if (action === 'upload') {
-            triggerPortraitUpload(characterName);
-        } else if (action === 'remove') {
+        if (action === 'remove') {
             removePortrait(characterName);
         } else if (action === 'remove-character') {
             removeCharacter(characterName);
-        } else if (action === 'clear-color') {
-            clearCharacterColor(characterName);
         } else if (action === 'character-sheet') {
             openCharacterSheet(characterName);
         } else if (action === 'open-expressions') {
@@ -394,15 +367,6 @@ export function initPortraitBar() {
         } else if (action === 'cancel-inject') {
             window.dispatchEvent(new CustomEvent('dooms:cancel-inject', { detail: { name: characterName } }));
         }
-    });
-
-    // ── Color picker change handler ──
-    $(document).on('change', '#dooms-pb-color-input', function () {
-        const characterName = $('#dooms-pb-context-menu').data('character');
-        if (!characterName) return;
-        const color = $(this).val();
-        setCharacterColor(characterName, color);
-        hideContextMenu();
     });
 
     // ── Open Character Roster button ──
