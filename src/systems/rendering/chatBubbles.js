@@ -5,7 +5,9 @@
  *
  * Works by parsing the rendered HTML inside .mes_text, splitting it into
  * narrator and dialogue segments, then re-rendering as styled bubbles.
- * Original HTML is preserved in a data attribute for clean revert.
+ * Original HTML is preserved in a WeakMap keyed by the .mes_text element
+ * for clean revert (a WeakMap entry is garbage-collected with the element,
+ * unlike a data attribute which doubled every message's DOM footprint).
  */
 import { extensionSettings } from '../../core/state.js';
 import { getActiveCharacterColors, getActiveKnownCharacters } from '../../core/persistence.js';
@@ -14,6 +16,27 @@ import { hexToRgb } from './sceneHeaders.js';
 import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
 import { chat } from '../../../../../../../script.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
+
+/**
+ * Original (pre-bubble) HTML per .mes_text element. Entries disappear with
+ * their element, so deleted/re-rendered messages never leak their HTML copy.
+ */
+const originalHtmlMap = new WeakMap();
+
+/**
+ * Clears all bubble bookkeeping for a .mes_text element WITHOUT restoring the
+ * original HTML. Callers use this when SillyTavern has just re-rendered the
+ * element with fresh content (render/edit/swipe), making the stored original
+ * and the applied-style markers stale.
+ * @param {HTMLElement} mesText
+ */
+export function clearBubbleState(mesText) {
+    if (!mesText) return;
+    originalHtmlMap.delete(mesText);
+    mesText.removeAttribute('data-dooms-bubbles-applied');
+    mesText.removeAttribute('data-dooms-bubbles-style');
+    mesText.removeAttribute('data-dooms-original-html'); // legacy attribute
+}
 
 // ─────────────────────────────────────────────
 //  Helpers
@@ -639,23 +662,24 @@ export function applyChatBubbles(messageElement, style) {
     }
 
     // Store original HTML for clean revert
-    if (!mesText.getAttribute('data-dooms-original-html')) {
-        mesText.setAttribute('data-dooms-original-html', mesText.innerHTML);
+    if (!originalHtmlMap.has(mesText)) {
+        originalHtmlMap.set(mesText, mesText.innerHTML);
     }
+    const originalHtml = originalHtmlMap.get(mesText);
 
     mesText.setAttribute('data-dooms-bubbles-applied', 'true');
     mesText.setAttribute('data-dooms-bubbles-style', style);
 
     if (isUser) {
         mesText.innerHTML = style === 'discord'
-            ? renderDiscordUserBubble(mesText.getAttribute('data-dooms-original-html'))
-            : renderCardUserBubble(mesText.getAttribute('data-dooms-original-html'));
+            ? renderDiscordUserBubble(originalHtml)
+            : renderCardUserBubble(originalHtml);
         return;
     }
 
     // Clone the original HTML to work with
     const tempContainer = document.createElement('div');
-    tempContainer.innerHTML = mesText.getAttribute('data-dooms-original-html');
+    tempContainer.innerHTML = originalHtml;
 
     const cbs = extensionSettings.chatBubbleSettings || {};
     const skipStyledDivs = cbs.skipStyledDivs !== false;
@@ -825,13 +849,11 @@ export function applyChatBubbles(messageElement, style) {
  * Revert a single message to its original HTML.
  */
 function revertSingleMessage(mesText) {
-    const original = mesText.getAttribute('data-dooms-original-html');
-    if (original !== null) {
+    const original = originalHtmlMap.get(mesText);
+    if (original !== undefined) {
         mesText.innerHTML = original;
     }
-    mesText.removeAttribute('data-dooms-bubbles-applied');
-    mesText.removeAttribute('data-dooms-bubbles-style');
-    mesText.removeAttribute('data-dooms-original-html');
+    clearBubbleState(mesText);
 }
 
 /**

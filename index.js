@@ -104,6 +104,7 @@ import {
     onChatBubbleModeChanged,
     applyChatBubbleSettings,
     initBubbleTtsHandlers,
+    clearBubbleState,
     injectReasoningTtsButtons
 } from './src/systems/rendering/chatBubbles.js';
 // infoPanel.js removed — banner/hud/ticker are now layout modes in sceneHeaders.js
@@ -2758,9 +2759,7 @@ jQuery(async () => {
                             // Clear stale bubble data — content was just (re)rendered.
                             // Without this, applyChatBubbles sees the old style attribute
                             // and early-returns, skipping bubble re-application.
-                            mesText.removeAttribute('data-dooms-original-html');
-                            mesText.removeAttribute('data-dooms-bubbles-applied');
-                            mesText.removeAttribute('data-dooms-bubbles-style');
+                            clearBubbleState(mesText);
                         }
                         // Wait for colored-dialogues to finish adding <font color> tags
                         // (it uses a 600ms debounce on CHARACTER_MESSAGE_RENDERED)
@@ -2861,9 +2860,7 @@ jQuery(async () => {
                         const mesText = messageElement.querySelector('.mes_text');
                         if (mesText) {
                             // Clear stale original HTML since the content was just edited
-                            mesText.removeAttribute('data-dooms-original-html');
-                            mesText.removeAttribute('data-dooms-bubbles-applied');
-                            mesText.removeAttribute('data-dooms-bubbles-style');
+                            clearBubbleState(mesText);
                         }
                         // Wait for colored-dialogues to finish recoloring
                         setTimeout(() => applyChatBubbles(messageElement, extensionSettings.chatBubbleMode), 800);
@@ -2916,9 +2913,7 @@ jQuery(async () => {
                 const mesText = messageElement.querySelector('.mes_text');
                 if (mesText) {
                     // Clear stale bubble data — the swipe has new content
-                    mesText.removeAttribute('data-dooms-original-html');
-                    mesText.removeAttribute('data-dooms-bubbles-applied');
-                    mesText.removeAttribute('data-dooms-bubbles-style');
+                    clearBubbleState(mesText);
                 }
                 // Delay to let colored-dialogues finish recoloring (600ms debounce + processing).
                 // Re-query the DOM element inside setTimeout because a failed swipe causes ST
