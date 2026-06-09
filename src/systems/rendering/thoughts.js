@@ -17,6 +17,13 @@ import { saveChatData, saveSettings } from '../../core/persistence.js';
 import { getSafeThumbnailUrl, getExpressionAwarePortrait } from '../../utils/avatars.js';
 import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { isItemLocked, setItemLock } from '../generation/lockManager.js';
+import { keyedReconcile } from '../../utils/domDiff.js';
+
+/**
+ * Per-card steady-state HTML cache (character name -> html) so the keyed
+ * reconciler can skip unchanged cards without re-parsing them.
+ */
+const thoughtCardHtmlCache = new Map();
 /**
  * Tracks which character cards are currently flipped (showing the back face).
  * Preserved across re-renders so flipping isn't lost when renderThoughts() rebuilds the DOM.
@@ -286,6 +293,7 @@ export function renderThoughts({ preserveScroll = false } = {}) {
     const thoughtsData = lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts;
     if (!thoughtsData) {
         $thoughtsContainer.html('<div class="rpg-inventory-empty">No character data generated yet</div>');
+        thoughtCardHtmlCache.clear();
         _lastThoughtsDataKey = null;
         return;
     }
@@ -507,21 +515,15 @@ export function renderThoughts({ preserveScroll = false } = {}) {
         debugLog(`[RPG Thoughts] Filtered ${beforeFilter - presentCharacters.length} off-scene characters`);
     }
 
-    // Build HTML
-    let html = '';
     debugLog('[RPG Thoughts] ==================== BUILDING HTML ====================');
     debugLog('[RPG Thoughts] Starting HTML generation for', presentCharacters.length + ' characters');
-    // If no characters parsed, show empty state (no placeholder)
-    if (presentCharacters.length === 0) {
-        debugLog('[RPG Thoughts] ⚠ No characters parsed - showing empty state');
-        html += '<div class="rpg-thoughts-content"></div>';
-    } else {
-        html += '<div class="rpg-thoughts-content">';
-        let characterIndex = 0;
-        for (const char of presentCharacters) {
-            characterIndex++;
-            try {
-                debugLog(`[RPG Thoughts] Building HTML for character ${characterIndex}/${presentCharacters.length}:`, char.name);
+
+    /**
+     * Builds the steady-state HTML for one character card (front + back face,
+     * wrapped in the flipper). Used by the keyed reconciler below.
+     */
+    function buildCharacterCardHtml(char) {
+        let html = '';
                 // Find character portrait
                 // Use a base64-encoded SVG placeholder as fallback to avoid 400 errors
                 let characterPortrait = FALLBACK_AVATAR_DATA_URI;
@@ -722,31 +724,74 @@ export function renderThoughts({ preserveScroll = false } = {}) {
                     </div>
                     </div>
                 `;
-                debugLog(`[RPG Thoughts] ✓ Successfully built HTML for ${char.name}`);
+        return html;
+    }
+
+    // ── Keyed reconcile into .rpg-thoughts-content ──
+    // The content wrapper persists across renders, so scroll position and
+    // unchanged cards (with their flip/focus state) are left untouched.
+    let contentEl = $thoughtsContainer.children('.rpg-thoughts-content')[0];
+    if (!contentEl) {
+        $thoughtsContainer.html('<div class="rpg-thoughts-content"></div>');
+        contentEl = $thoughtsContainer.children('.rpg-thoughts-content')[0];
+        thoughtCardHtmlCache.clear();
+    }
+
+    keyedReconcile(contentEl, presentCharacters, {
+        key: (char) => char.name,
+        create: (char) => {
+            let html = '';
+            try {
+                html = buildCharacterCardHtml(char);
             } catch (charError) {
                 debugLog(`[RPG Thoughts] ✗ ERROR building HTML for ${char.name}:`, charError.message);
-                debugLog('[RPG Thoughts] Error stack:', charError.stack);
-                // Continue with next character instead of crashing
             }
-        }
-        debugLog('[RPG Thoughts] Finished building all character cards');
-        // Add "Add Character" button if data exists (inside rpg-thoughts-content)
-        if (presentCharacters.length > 0) {
-            html += `
-                <button class="rpg-add-character-btn" title="Add a new character">
-                    <i class="fa-solid fa-plus"></i> Add Character
-                </button>
-            `;
-        }
-        html += '</div>';
+            thoughtCardHtmlCache.set(char.name, html);
+            const tpl = document.createElement('template');
+            tpl.innerHTML = html.trim();
+            const el = tpl.content.firstElementChild || document.createElement('div');
+            // Restore flip state for re-created cards
+            if (flippedCards.has(char.name)) el.classList.add('flipped');
+            return el;
+        },
+        update: (el, char) => {
+            let html = '';
+            try {
+                html = buildCharacterCardHtml(char);
+            } catch (charError) {
+                debugLog(`[RPG Thoughts] ✗ ERROR building HTML for ${char.name}:`, charError.message);
+                return;
+            }
+            if (thoughtCardHtmlCache.get(char.name) === html) return; // unchanged
+            thoughtCardHtmlCache.set(char.name, html);
+            const tpl = document.createElement('template');
+            tpl.innerHTML = html.trim();
+            const fresh = tpl.content.firstElementChild;
+            if (!fresh) return;
+            // Patch in place; preserve current flip state over the markup default
+            const wasFlipped = el.classList.contains('flipped');
+            el.className = fresh.className + (wasFlipped ? ' flipped' : '');
+            el.innerHTML = fresh.innerHTML;
+        },
+        onExit: (el) => {
+            const name = el.getAttribute('data-character-name');
+            if (name) thoughtCardHtmlCache.delete(name);
+            el.remove();
+        },
+    });
+
+    // "Add Character" button lives after the cards; keep it in sync manually
+    // (it has no data key, so the reconciler leaves it alone).
+    const addBtn = contentEl.querySelector('.rpg-add-character-btn');
+    if (presentCharacters.length > 0 && !addBtn) {
+        contentEl.insertAdjacentHTML('beforeend',
+            '<button class="rpg-add-character-btn" title="Add a new character"><i class="fa-solid fa-plus"></i> Add Character</button>');
+    } else if (presentCharacters.length === 0 && addBtn) {
+        addBtn.remove();
+    } else if (addBtn && addBtn !== contentEl.lastElementChild) {
+        contentEl.appendChild(addBtn); // keep it after the cards
     }
-    $thoughtsContainer.html(html);
-    // Restore flipped card states after re-render
-    if (flippedCards.size > 0) {
-        flippedCards.forEach(charName => {
-            $thoughtsContainer.find(`.rpg-card-flipper[data-character-name="${charName}"]`).addClass('flipped');
-        });
-    }
+
     debugLog('[RPG Thoughts] ✓ HTML rendered to container');
     debugLog('[RPG Thoughts] =======================================================');
     // NOTE: Event handlers are registered ONCE via initThoughtsEventDelegation()
@@ -755,10 +800,11 @@ export function renderThoughts({ preserveScroll = false } = {}) {
     if (extensionSettings.enableAnimations) {
         setTimeout(() => $thoughtsContainer.removeClass('rpg-content-updating'), 600);
     }
-    // Restore scroll position after re-render
+    // Restore scroll position after re-render (only matters when the content
+    // wrapper itself was rebuilt; in-place reconciles never reset scroll)
     if (preserveScroll) {
         const $content = $thoughtsContainer.find('.rpg-thoughts-content');
-        if ($content.length) {
+        if ($content.length && savedContentScroll) {
             $content[0].scrollTop = savedContentScroll;
         }
     }
@@ -1335,6 +1381,7 @@ function renderThoughtsSidebarOnly() {
     const thoughtsData = lastGeneratedData.characterThoughts || committedTrackerData.characterThoughts;
     if (!thoughtsData) {
         $thoughtsContainer.html('<div class="rpg-inventory-empty">No character data generated yet</div>');
+        thoughtCardHtmlCache.clear();
         return;
     }
     // Re-render sidebar content (this would be the full logic from renderThoughts)
