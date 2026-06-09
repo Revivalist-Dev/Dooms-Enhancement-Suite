@@ -239,6 +239,35 @@ export async function migrateAvatarsToFiles(saveSettings) {
     return out;
 }
 
+/**
+ * Reclaims the in-memory/in-settings corruption-recovery snapshot once the
+ * avatar migration has fully completed in a *previous* session.
+ *
+ * The snapshot (__avatarBackupV1) is a full duplicate of every avatar's base64
+ * payload, so for users upgrading from a legacy (pre-v24) save it can hold tens
+ * of MB resident in extensionSettings indefinitely. It exists only as a safety
+ * net while the migration is in flight; once settingsVersion has reached 24 and
+ * no data: URLs remain (i.e. the migration succeeded and persisted), the backup
+ * is dead weight. We retire it on the next load after a successful migration,
+ * which still leaves one full session of safety after the bytes hit disk.
+ *
+ * Safe no-op when there's no backup, the migration is incomplete, or any data
+ * URL is still present (in which case the backup is still needed).
+ *
+ * @param {() => void} saveSettings - persistence flusher
+ * @returns {boolean} true if a backup was retired
+ */
+export function retireAvatarBackupIfComplete(saveSettings) {
+    if (!extensionSettings.__avatarBackupV1) return false;
+    if ((extensionSettings.settingsVersion ?? 1) < 24) return false;
+    if (countRemainingDataUrls() !== 0) return false;
+
+    delete extensionSettings.__avatarBackupV1;
+    if (typeof saveSettings === 'function') saveSettings();
+    console.log('[Dooms Tracker] avatar migration: retired __avatarBackupV1 snapshot; settings is smaller');
+    return true;
+}
+
 // Schedules migrateAvatarsToFiles() to run during browser idle time so
 // first-paint after upgrade isn't blocked on portrait uploads.
 export function scheduleAvatarMigration(saveSettings) {

@@ -820,10 +820,33 @@ export function updateWeatherEffect() {
     }
 }
 
+let _visibilityHandlerBound = false;
+
+/**
+ * Pause continuous particle animations while the tab is hidden.
+ *
+ * Weather effects are built from dozens of DOM nodes (up to ~80 for a night
+ * scene) each running an `infinite` CSS animation. Those keep the compositor
+ * busy and hold GPU/host memory for as long as the page is open — pure waste
+ * when the tab isn't even visible. Toggling a single body class lets CSS park
+ * every particle's `animation-play-state` with zero visual cost while visible.
+ */
+function syncAnimationPlayState() {
+    document.body.classList.toggle('dooms-anim-paused', document.hidden);
+}
+
+function bindVisibilityPauseOnce() {
+    if (_visibilityHandlerBound) return;
+    _visibilityHandlerBound = true;
+    document.addEventListener('visibilitychange', syncAnimationPlayState);
+    syncAnimationPlayState();
+}
+
 /**
  * Initialize weather effects
  */
 export function initWeatherEffects() {
+    bindVisibilityPauseOnce();
     updateWeatherEffect();
 }
 

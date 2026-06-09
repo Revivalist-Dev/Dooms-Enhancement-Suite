@@ -11587,6 +11587,22 @@ body[data-theme="cyberpunk"] .rpg-music-widget-play {
     position: absolute;
 }
 
+/* Resource saver: park every continuously-animating weather particle while the
+   tab is hidden (toggled from JS via visibilitychange) or when the user has
+   asked for reduced motion. These run `infinite` animations, so pausing them
+   stops needless compositing/GPU work and frees the browser to idle. */
+body.dooms-anim-paused .rpg-weather-particle,
+body.dooms-anim-paused .rpg-snowflake {
+    animation-play-state: paused !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rpg-weather-particle,
+    .rpg-snowflake {
+        animation-play-state: paused !important;
+    }
+}
+
 /* Rain drops */
 .rpg-raindrop {
     width: 2px;

@@ -20,7 +20,7 @@ import {
     clearSyncedExpressionLabels,
 } from './state.js';
 import { migrateToV3JSON } from '../utils/jsonMigration.js';
-import { scheduleAvatarMigration } from '../utils/avatarMigration.js';
+import { scheduleAvatarMigration, retireAvatarBackupIfComplete } from '../utils/avatarMigration.js';
 import { parseQuests } from '../systems/generation/parser.js';
 import { extensionName } from './config.js';
 /**
@@ -436,6 +436,11 @@ export function loadSettings() {
             // bump settingsVersion to 24 only after every upload succeeds.
             if (currentVersion < 24) {
                 scheduleAvatarMigration(saveSettings);
+            } else {
+                // Migration already completed and persisted in a prior session —
+                // the corruption-recovery snapshot is now dead weight (a full
+                // duplicate of every avatar's base64). Reclaim that memory.
+                retireAvatarBackupIfComplete(saveSettings);
             }
 
             // Auto Portraits were added after the expression system. They are
