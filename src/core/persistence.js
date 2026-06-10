@@ -462,6 +462,13 @@ export function loadSettings() {
                 settingsChanged = true;
             }
 
+            // Performance mode (Rebuild): opt-in switch that strips DES
+            // animations, blur, and transitions and pauses canvas particles.
+            if (extensionSettings.performanceMode === undefined) {
+                extensionSettings.performanceMode = false;
+                settingsChanged = true;
+            }
+
             // Save migrated settings
             if (settingsChanged) {
                 saveSettings();

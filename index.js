@@ -33,6 +33,7 @@ import {
 import { loadSettings, saveSettings, saveChatData, loadChatData, updateMessageSwipeData } from './src/core/persistence.js';
 import { registerAllEvents } from './src/core/events.js';
 import { registerSettingsUIInitializer, ensureSettingsUI } from './src/core/lazyUI.js';
+import { ensureCss, removeCss } from './src/core/cssLoader.js';
 // Generation & Parsing modules
 import {
     generateTrackerExample,
@@ -503,6 +504,19 @@ function loadChatBubbleSettingsUI() {
 }
 
 /**
+ * Applies performance mode: a body class the particle engine checks, plus a
+ * kill-stylesheet (styles/perf-mode.css) that strips DES animations, blur,
+ * and transitions. The stylesheet only exists in the DOM while the mode is
+ * on, so its selectors cost nothing when the mode is off.
+ */
+function applyPerformanceMode() {
+    const on = !!extensionSettings.performanceMode;
+    document.body.classList.toggle('dooms-perf-mode', on);
+    if (on) ensureCss('perf-mode');
+    else removeCss('perf-mode');
+}
+
+/**
  * Hides/shows SillyTavern's top bar based on the FAB setting. Module-scope
  * because it must apply at startup, before the settings binder has run.
  */
@@ -522,6 +536,9 @@ function applyHideStTopBar() {
  */
 async function loadSettingsTemplate() {
     console.log('[Dooms Tracker] Loading deferred settings UI...');
+    // Modal styles split out of style.css — must be in place before the
+    // template is appended so the popup never flashes unstyled.
+    await ensureCss('modals');
     // Load the HTML template using SillyTavern's template system
     const templateHtml = await renderExtensionTemplateAsync(extensionName, 'template');
     console.log('[Dooms Tracker] Template loaded, length =', templateHtml?.length || 0);
@@ -614,6 +631,11 @@ function bindSettingsUI() {
         extensionSettings.showInfoBox = $(this).prop('checked');
         saveSettings();
         updateChatSceneHeaders();
+    });
+    $('#rpg-toggle-performance-mode').on('change', function () {
+        extensionSettings.performanceMode = $(this).prop('checked');
+        saveSettings();
+        applyPerformanceMode();
     });
     $('#rpg-toggle-thoughts').on('change', function () {
         extensionSettings.showCharacterThoughts = $(this).prop('checked');
@@ -1683,6 +1705,7 @@ function bindSettingsUI() {
     updateGenerationModeUI();
     // Display
     $('#rpg-toggle-info-box').prop('checked', extensionSettings.showInfoBox);
+    $('#rpg-toggle-performance-mode').prop('checked', !!extensionSettings.performanceMode);
     $('#rpg-toggle-thoughts').prop('checked', extensionSettings.showCharacterThoughts);
     $('#rpg-toggle-quests').prop('checked', extensionSettings.showQuests);
     // Lock Icons toggle removed — lock UI disabled until wired into scene tracker
@@ -2136,6 +2159,7 @@ async function initUI() {
     // trigger listener, and fullsheet import buttons on the initial chat.
     try { applyChatBubbleSettings(); } catch (e) { console.error('[Dooms Tracker] applyChatBubbleSettings() FAILED:', e); }
     try { applyHideStTopBar(); } catch (e) { console.error('[Dooms Tracker] applyHideStTopBar() FAILED:', e); }
+    try { applyPerformanceMode(); } catch (e) { console.error('[Dooms Tracker] applyPerformanceMode() FAILED:', e); }
     try { initDoomCounterListener(); } catch (e) { console.error('[Dooms Tracker] initDoomCounterListener() FAILED:', e); }
     setTimeout(() => { try { injectFullSheetButtons(); } catch (_) { } }, 100);
     if (extensionSettings.chatBubbleSettings?.hideStAvatar) {
@@ -2507,6 +2531,9 @@ jQuery(async () => {
         // so the animation plays while everything loads in the background
         let introPromise = Promise.resolve();
         try {
+            if ((extensionSettings.loadingIntroMode || 'off') !== 'off') {
+                await ensureCss('loading-intro');
+            }
             introPromise = playLoadingIntro();
         } catch (error) {
             console.error('[Dooms Tracker] Loading intro failed:', error);

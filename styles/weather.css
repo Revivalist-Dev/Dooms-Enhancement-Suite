@@ -1,0 +1,790 @@
+/* Weather overlay/ambience styles — loaded when dynamic weather or
+   snowflakes are enabled. */
+
+
+/* Weather Widget */
+.rpg-weather-widget {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.188em;
+    padding: 0.25em;
+    max-width: 100%;
+    height: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+    container-type: size;
+}
+
+
+/* Weather Widget Icon */
+.rpg-weather-icon {
+    font-size: clamp(0.875rem, 2.5vw, 1.25rem);
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+
+.rpg-weather-forecast {
+    font-size: clamp(0.5rem, 4cqh, 0.75rem);
+    margin: 0;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.013em;
+    opacity: 0.85;
+    line-height: 1.1;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
+    width: 100%;
+    white-space: normal;
+    flex-shrink: 1;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    hyphens: auto;
+}
+
+
+.rpg-weather-forecast.rpg-editable {
+    margin-top: 0;
+}
+
+
+/* Mobile-specific panel behavior - matches SillyTavern's 1000px breakpoint */
+/* CACHE BUST v2025-01-16 */@media (max-width: 1000px) {.rpg-weather-forecast {
+        font-size: min(2.2vw, 0.6875rem) !important;
+    }
+}
+
+/* ============================================
+   SNOWFLAKES EFFECT
+   ============================================ */
+
+/* Snowflakes container - covers entire viewport */
+.rpg-snowflakes-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9999;
+    overflow: hidden;
+}
+
+
+/* Individual snowflake */
+
+/* Snowfall animation */
+
+
+/* Create variations for different snowflakes */
+
+/* Slower mobile animation for performance */
+
+/* ============================================
+   DYNAMIC WEATHER EFFECTS
+   ============================================ */
+
+/* Weather particles container */
+.rpg-weather-particles {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh; /* Dynamic viewport height for mobile browsers */
+    pointer-events: none;
+    z-index: 1;
+    overflow: hidden;
+}
+
+
+/* Base particle */
+.rpg-weather-particle {
+    position: absolute;
+}
+
+
+/* Resource saver: park every continuously-animating weather particle while the
+   tab is hidden (toggled from JS via visibilitychange) or when the user has
+   asked for reduced motion. These run `infinite` animations, so pausing them
+   stops needless compositing/GPU work and frees the browser to idle. */body.dooms-anim-paused .rpg-weather-particle {
+    animation-play-state: paused !important;
+}
+@media (prefers-reduced-motion: reduce) {.rpg-weather-particle {
+        animation-play-state: paused !important;
+    }
+}
+
+
+/* Rain drops */
+
+
+/* Mist/Fog layers */
+
+
+/* Clear/Sunny Weather Effects */
+
+/* Container modifier for clear weather */
+.rpg-clear-weather {
+    overflow: hidden;
+}
+
+
+/* Warm ambient glow overlay */
+.rpg-clear-ambient-glow {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(ellipse at 15% 10%,
+        rgba(255, 245, 200, 0.15) 0%,
+        rgba(255, 240, 180, 0.08) 30%,
+        transparent 70%);
+    animation: rpg-clear-ambient-pulse 8s ease-in-out infinite;
+    pointer-events: none;
+}
+
+
+@keyframes rpg-clear-ambient-pulse {
+    0%, 100% {
+        opacity: 0.6;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+
+/* Floating dust motes / pollen particles */
+
+
+/* Soft drifting light orbs */
+
+
+/* Sun - positioned dynamically based on hour */
+.rpg-clear-sun {
+    position: fixed;
+    width: 50px;
+    height: 50px;
+    background: radial-gradient(circle at 40% 40%,
+        rgba(255, 255, 240, 1) 0%,
+        rgba(255, 250, 200, 1) 30%,
+        rgba(255, 220, 120, 0.9) 60%,
+        rgba(255, 180, 80, 0.6) 80%,
+        rgba(255, 150, 50, 0) 100%);
+    border-radius: 50%;
+    box-shadow:
+        0 0 30px 10px rgba(255, 220, 100, 0.5),
+        0 0 60px 20px rgba(255, 200, 80, 0.3),
+        0 0 100px 40px rgba(255, 180, 60, 0.15);
+    transform: translate(-50%, -50%);
+    animation: rpg-clear-sun-pulse 8s ease-in-out infinite;
+    pointer-events: none;
+}
+
+
+@keyframes rpg-clear-sun-pulse {
+    0%, 100% {
+        transform: translate(-50%, -50%) scale(1);
+        box-shadow:
+            0 0 30px 10px rgba(255, 220, 100, 0.5),
+            0 0 60px 20px rgba(255, 200, 80, 0.3),
+            0 0 100px 40px rgba(255, 180, 60, 0.15);
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.05);
+        box-shadow:
+            0 0 35px 12px rgba(255, 220, 100, 0.6),
+            0 0 70px 25px rgba(255, 200, 80, 0.35),
+            0 0 110px 45px rgba(255, 180, 60, 0.2);
+    }
+}
+
+
+/* Sun glow aura */
+.rpg-clear-sun-glow {
+    position: fixed;
+    width: 150px;
+    height: 150px;
+    background: radial-gradient(circle at center,
+        rgba(255, 240, 180, 0.25) 0%,
+        rgba(255, 220, 150, 0.15) 30%,
+        rgba(255, 200, 120, 0.08) 50%,
+        transparent 70%);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    filter: blur(8px);
+    animation: rpg-clear-sun-glow-pulse 6s ease-in-out infinite;
+    pointer-events: none;
+}
+
+
+@keyframes rpg-clear-sun-glow-pulse {
+    0%, 100% {
+        opacity: 0.7;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.15);
+    }
+}
+
+
+/* ===== Sunrise Effects (Dawn) ===== */
+
+.rpg-sunrise-weather {
+    overflow: hidden;
+}
+
+
+/* Sunrise sky gradient overlay */
+.rpg-sunrise-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100dvh;
+    background: linear-gradient(to bottom,
+        rgba(40, 30, 80, 0.1) 0%,
+        rgba(120, 60, 120, 0.08) 15%,
+        rgba(200, 100, 100, 0.1) 35%,
+        rgba(255, 140, 100, 0.12) 55%,
+        rgba(255, 180, 120, 0.1) 75%,
+        rgba(255, 200, 150, 0.08) 100%);
+    animation: rpg-sunrise-sky-transition 30s ease-in-out infinite alternate;
+    pointer-events: none;
+}
+
+
+@keyframes rpg-sunrise-sky-transition {
+    0% {
+        opacity: 0.8;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+
+/* Sunrise sun - more orange/red */
+.rpg-sunrise-sun {
+    background: radial-gradient(circle at 40% 40%,
+        rgba(255, 255, 220, 1) 0%,
+        rgba(255, 220, 150, 1) 30%,
+        rgba(255, 160, 80, 0.9) 60%,
+        rgba(255, 100, 50, 0.6) 80%,
+        rgba(255, 80, 30, 0) 100%) !important;
+    box-shadow:
+        0 0 40px 15px rgba(255, 180, 100, 0.6),
+        0 0 80px 30px rgba(255, 140, 80, 0.4),
+        0 0 120px 50px rgba(255, 100, 50, 0.2) !important;
+}
+
+
+/* Sunrise sun glow - warm orange */
+.rpg-sunrise-glow {
+    background: radial-gradient(circle at center,
+        rgba(255, 200, 150, 0.35) 0%,
+        rgba(255, 160, 100, 0.2) 30%,
+        rgba(255, 120, 80, 0.1) 50%,
+        transparent 70%) !important;
+}
+
+
+/* Horizon glow for sunrise */
+.rpg-sunrise-horizon-glow {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    height: 40dvh;
+    background: linear-gradient(to top,
+        rgba(255, 160, 100, 0.15) 0%,
+        rgba(255, 140, 90, 0.1) 20%,
+        rgba(255, 120, 80, 0.05) 50%,
+        rgba(255, 100, 70, 0.02) 75%,
+        transparent 100%);
+    animation: rpg-horizon-glow-pulse 8s ease-in-out infinite;
+    pointer-events: none;
+}
+
+
+/* ===== Sunset Effects (Dusk) ===== */
+
+.rpg-sunset-weather {
+    overflow: hidden;
+}
+
+
+/* Sunset sky gradient overlay */
+.rpg-sunset-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100dvh;
+    background: linear-gradient(to bottom,
+        rgba(30, 20, 60, 0.12) 0%,
+        rgba(80, 40, 100, 0.1) 15%,
+        rgba(150, 60, 90, 0.12) 30%,
+        rgba(220, 80, 70, 0.12) 50%,
+        rgba(255, 120, 80, 0.12) 70%,
+        rgba(255, 160, 100, 0.1) 85%,
+        rgba(255, 180, 120, 0.06) 100%);
+    animation: rpg-sunset-sky-transition 30s ease-in-out infinite alternate;
+    pointer-events: none;
+}
+
+
+@keyframes rpg-sunset-sky-transition {
+    0% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0.8;
+    }
+}
+
+
+/* Sunset sun - more red/deep orange */
+.rpg-sunset-sun {
+    background: radial-gradient(circle at 40% 40%,
+        rgba(255, 240, 200, 1) 0%,
+        rgba(255, 180, 100, 1) 30%,
+        rgba(255, 120, 60, 0.9) 60%,
+        rgba(255, 80, 40, 0.6) 80%,
+        rgba(200, 50, 30, 0) 100%) !important;
+    box-shadow:
+        0 0 40px 15px rgba(255, 140, 80, 0.6),
+        0 0 80px 30px rgba(255, 100, 60, 0.4),
+        0 0 120px 50px rgba(200, 60, 40, 0.2) !important;
+}
+
+
+/* Sunset sun glow - deep orange/red */
+.rpg-sunset-glow {
+    background: radial-gradient(circle at center,
+        rgba(255, 160, 120, 0.35) 0%,
+        rgba(255, 120, 80, 0.2) 30%,
+        rgba(200, 80, 60, 0.1) 50%,
+        transparent 70%) !important;
+}
+
+
+/* Horizon glow for sunset */
+.rpg-sunset-horizon-glow {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    height: 45dvh;
+    background: linear-gradient(to top,
+        rgba(255, 120, 60, 0.18) 0%,
+        rgba(255, 100, 50, 0.12) 20%,
+        rgba(220, 70, 50, 0.06) 45%,
+        rgba(150, 50, 60, 0.02) 70%,
+        transparent 100%);
+    animation: rpg-horizon-glow-pulse 8s ease-in-out infinite;
+    pointer-events: none;
+}
+
+
+/* Sunset dust motes - pinkish tint */
+
+/* Lens flare effect */
+.rpg-clear-lens-flare {
+    position: fixed;
+    top: 5%;
+    left: 10%;
+    width: 150px;
+    height: 150px;
+    background: radial-gradient(circle at center,
+        rgba(255, 255, 255, 0.3) 0%,
+        rgba(255, 250, 220, 0.15) 20%,
+        rgba(255, 240, 180, 0.08) 40%,
+        transparent 60%);
+    border-radius: 50%;
+    animation: rpg-clear-lens-flare-pulse 6s ease-in-out infinite;
+    pointer-events: none;
+}
+
+
+.rpg-clear-lens-flare::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 60px;
+    height: 60px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle at center,
+        rgba(255, 255, 255, 0.5) 0%,
+        rgba(255, 250, 230, 0.2) 50%,
+        transparent 70%);
+    border-radius: 50%;
+    animation: rpg-clear-lens-core-pulse 4s ease-in-out infinite;
+}
+
+
+.rpg-clear-lens-flare::after {
+    content: '';
+    position: absolute;
+    top: 120%;
+    left: 150%;
+    width: 40px;
+    height: 40px;
+    background: radial-gradient(circle at center,
+        rgba(255, 200, 150, 0.4) 0%,
+        rgba(255, 180, 100, 0.1) 50%,
+        transparent 70%);
+    border-radius: 50%;
+    animation: rpg-clear-secondary-flare 8s ease-in-out infinite;
+}
+
+
+@keyframes rpg-clear-lens-flare-pulse {
+    0%, 100% {
+        opacity: 0.7;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+}
+
+
+@keyframes rpg-clear-lens-core-pulse {
+    0%, 100% {
+        opacity: 0.8;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.15);
+    }
+}
+
+
+@keyframes rpg-clear-secondary-flare {
+    0%, 100% {
+        opacity: 0.3;
+        transform: scale(1);
+    }
+    30% {
+        opacity: 0.6;
+        transform: scale(1.2);
+    }
+    70% {
+        opacity: 0.4;
+        transform: scale(0.9);
+    }
+}
+
+
+/* ===== Nighttime Clear Weather Effects ===== */
+
+/* Container modifier for night weather */
+.rpg-night-weather {
+    overflow: hidden;
+}
+
+
+/* Dark blue night overlay */
+.rpg-night-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom,
+        rgba(10, 15, 40, 0.3) 0%,
+        rgba(15, 25, 55, 0.2) 40%,
+        rgba(20, 30, 60, 0.15) 100%);
+    pointer-events: none;
+}
+
+
+/* Moon */
+.rpg-night-moon {
+    position: fixed;
+    width: 60px;
+    height: 60px;
+    background: radial-gradient(circle at 35% 35%,
+        rgba(255, 255, 245, 1) 0%,
+        rgba(240, 240, 230, 0.95) 40%,
+        rgba(220, 220, 210, 0.9) 60%,
+        rgba(200, 200, 195, 0.8) 80%,
+        rgba(180, 180, 175, 0) 100%);
+    border-radius: 50%;
+    box-shadow:
+        0 0 20px 5px rgba(255, 255, 240, 0.4),
+        0 0 40px 10px rgba(200, 210, 255, 0.2),
+        inset -8px -5px 15px rgba(150, 150, 140, 0.3);
+    animation: rpg-night-moon-float 30s ease-in-out infinite;
+    pointer-events: none;
+}
+
+
+@keyframes rpg-night-moon-float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(10px);
+    }
+}
+
+
+/* Moon glow aura */
+.rpg-night-moon-glow {
+    position: fixed;
+    width: 120px;
+    height: 120px;
+    background: radial-gradient(circle at center,
+        rgba(200, 220, 255, 0.15) 0%,
+        rgba(180, 200, 240, 0.08) 40%,
+        transparent 70%);
+    border-radius: 50%;
+    filter: blur(10px);
+    animation: rpg-night-moon-glow-pulse 8s ease-in-out infinite;
+    pointer-events: none;
+}
+
+
+@keyframes rpg-night-moon-glow-pulse {
+    0%, 100% {
+        opacity: 0.6;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+}
+
+
+/* Twinkling stars */
+
+
+/* Brighter stars with cross-flare effect */
+
+/* Fireflies */
+
+
+/* Shooting star */
+.rpg-night-shooting-star {
+    position: fixed;
+    top: 15%;
+    left: -10%;
+    width: 100px;
+    height: 2px;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.2) 20%,
+        rgba(255, 255, 255, 0.8) 60%,
+        rgba(255, 255, 255, 1) 100%);
+    border-radius: 50%;
+    transform: rotate(35deg);
+    animation: rpg-night-shooting-star-fly 12s ease-in-out infinite;
+    pointer-events: none;
+    opacity: 0;
+}
+
+
+.rpg-night-shooting-star::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    background: rgba(255, 255, 255, 1);
+    border-radius: 50%;
+    box-shadow: 0 0 10px 4px rgba(255, 255, 255, 0.8);
+}
+
+
+@keyframes rpg-night-shooting-star-fly {
+    0%, 85%, 100% {
+        opacity: 0;
+        left: -10%;
+        top: 15%;
+    }
+    88% {
+        opacity: 1;
+    }
+    95% {
+        opacity: 1;
+        left: 110%;
+        top: 45%;
+    }
+    96% {
+        opacity: 0;
+    }
+}
+
+
+/* Mobile optimizations */@media (max-width: 768px) {
+
+    /* Clear weather mobile optimizations */.rpg-clear-lens-flare {
+        width: 100px;
+        height: 100px;
+    }
+
+
+    /* Sun mobile optimizations */.rpg-clear-sun {
+        width: 40px;
+        height: 40px;
+    }
+.rpg-clear-sun-glow {
+        width: 100px;
+        height: 100px;
+    }
+
+
+    /* Nighttime mobile optimizations */.rpg-night-moon {
+        width: 45px;
+        height: 45px;
+    }
+.rpg-night-moon-glow {
+        width: 90px;
+        height: 90px;
+    }
+.rpg-night-shooting-star {
+        animation-duration: 18s;
+    }
+
+
+    /* Sunrise/Sunset mobile optimizations */.rpg-sunrise-horizon-glow,
+    .rpg-sunset-horizon-glow {
+        height: 35%;
+    }
+}
+
+
+/* Foreground mode - reduced opacity for celestial bodies to not obstruct content */
+.rpg-weather-foreground .rpg-clear-sun {
+    opacity: 0.5;
+    box-shadow:
+        0 0 20px 8px rgba(255, 220, 100, 0.3),
+        0 0 40px 15px rgba(255, 200, 80, 0.15),
+        0 0 60px 25px rgba(255, 180, 60, 0.08);
+}
+
+
+.rpg-weather-foreground .rpg-clear-sun-glow {
+    opacity: 0.3;
+}
+
+
+.rpg-weather-foreground .rpg-clear-lens-flare {
+    opacity: 0.3;
+}
+
+
+.rpg-weather-foreground .rpg-clear-ambient-glow {
+    opacity: 0.4;
+}
+
+
+.rpg-weather-foreground .rpg-night-moon {
+    opacity: 0.7;
+    box-shadow:
+        0 0 15px 4px rgba(255, 255, 240, 0.25),
+        0 0 30px 8px rgba(200, 210, 255, 0.12);
+}
+
+
+.rpg-weather-foreground .rpg-night-moon-glow {
+    opacity: 0.3;
+}
+
+
+.rpg-weather-foreground .rpg-night-overlay {
+    opacity: 0.4;
+}
+
+
+/* Sunrise/Sunset foreground mode */
+.rpg-weather-foreground .rpg-sunrise-overlay,
+.rpg-weather-foreground .rpg-sunset-overlay {
+    opacity: 0.4;
+}
+
+
+.rpg-weather-foreground .rpg-sunrise-horizon-glow,
+.rpg-weather-foreground .rpg-sunset-horizon-glow {
+    opacity: 0.3;
+}
+
+
+.rpg-weather-foreground .rpg-sunrise-sun,
+.rpg-weather-foreground .rpg-sunset-sun {
+    opacity: 0.5 !important;
+}
+
+
+.rpg-weather-foreground .rpg-sunrise-glow,
+.rpg-weather-foreground .rpg-sunset-glow {
+    opacity: 0.3 !important;
+}
+
+
+/* Lightning flash effect */
+.rpg-lightning {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0);
+    animation: rpg-lightningFlash 6s ease-in-out infinite;
+    pointer-events: none;
+}
+
+
+@keyframes rpg-lightningFlash {
+    0%, 100% {
+        background: rgba(255, 255, 255, 0);
+    }
+    10% {
+        background: rgba(200, 220, 255, 0.4);
+    }
+    10.5% {
+        background: rgba(255, 255, 255, 0);
+    }
+    11% {
+        background: rgba(220, 235, 255, 0.6);
+    }
+    11.3% {
+        background: rgba(255, 255, 255, 0);
+    }
+    45% {
+        background: rgba(255, 255, 255, 0);
+    }
+    45.2% {
+        background: rgba(210, 225, 255, 0.5);
+    }
+    45.5% {
+        background: rgba(255, 255, 255, 0);
+    }
+}
+
+
+/* Wind streaks effect */
+
+
+/* Mobile optimizations for new effects */@media (max-width: 768px) {.rpg-lightning {
+        animation-duration: 8s;
+    }
+}

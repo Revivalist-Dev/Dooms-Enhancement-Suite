@@ -7,6 +7,7 @@
  */
 import { extensionSettings } from '../../core/state.js';
 import { createParticleEngine } from './particleCanvas.js';
+import { ensureCss } from '../../core/cssLoader.js';
 
 let snowflakesContainer = null;
 let snowEngine = null;
@@ -16,6 +17,7 @@ let snowEngine = null;
  */
 function createSnowflakes() {
     if (snowflakesContainer) return; // Already created
+    ensureCss('weather'); // container z-index/positioning styles
     snowflakesContainer = document.createElement('div');
     snowflakesContainer.className = 'rpg-snowflakes-container';
     document.body.appendChild(snowflakesContainer);

@@ -6,6 +6,7 @@
 import { extensionSettings, lastGeneratedData, committedTrackerData } from '../../core/state.js';
 import { repairJSON } from '../../utils/jsonRepair.js';
 import { getParticleEngine } from './particleCanvas.js';
+import { ensureCss } from '../../core/cssLoader.js';
 
 let weatherContainer = null;
 let currentWeatherType = null;
@@ -543,6 +544,8 @@ export function updateWeatherEffect() {
         removeWeatherEffect();
         return;
     }
+    // Overlay styles are split out of style.css; idempotent after first call.
+    ensureCss('weather');
 
     const weather = getCurrentWeather();
     const weatherType = parseWeatherType(weather);

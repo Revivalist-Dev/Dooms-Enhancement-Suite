@@ -134,6 +134,7 @@ export let extensionSettings = {
         highlightOpacity: 100
     },
     enableAnimations: true, // Enable smooth animations for content updates
+    performanceMode: false, // Kill animations/blur/transitions + pause particles for minimum GPU/CPU cost
     mobileFabPosition: {
         top: 'calc(var(--topBarBlockSize) + 60px)',
         right: '12px'
