@@ -241,9 +241,14 @@ editor, and inspector modal.
 7. **Touching the prompt pipeline?** The parser (`parser.js` + `jsonRepair.js`)
    defines the contract. Prose can change; keys, shapes, and the single
    unified code block cannot. Gate phrasing changes behind `compactPrompts`.
-8. **Every change:** `node --check` all touched JS; brace-balance check after
-   CSS edits; update `docs/parity-checklist.md` and `docs/perf-baseline.md`;
-   one logical change per commit with measured numbers in the message.
+8. **Every change:** run `node tools/load-check.mjs` — it links and
+   evaluates the ENTIRE module graph with stubbed ST internals, which is the
+   only reliable pre-ship gate. (`node --check` does not parse the module
+   goal correctly and has passed files with top-level syntax errors that
+   made the whole extension disappear — commit `65f5ba4`.) Brace-balance
+   check after CSS edits; update `docs/parity-checklist.md` and
+   `docs/perf-baseline.md`; one logical change per commit with measured
+   numbers in the message.
 
 ### How to find the next win (the method, in order)
 
