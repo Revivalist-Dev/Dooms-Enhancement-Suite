@@ -5,7 +5,6 @@
  * always-needed core and the rest lives in styles/<id>.css files injected
  * on demand:
  *   - 'modals'        — all DES modal/settings UI (with the deferred template)
- *   - 'loading-intro' — startup intro (only when the intro is enabled)
  *   - 'weather'       — weather overlay/ambience styles (only when enabled)
  *
  * ensureCss() resolves when the sheet has loaded, so callers can await it

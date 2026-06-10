@@ -10,7 +10,7 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] v24 settings from live install load without reset; old keys migrate
       (`rpg-companion-sillytavern`, `dooms-character-tracker`)
 - [ ] Per-chat data (`chat_metadata.dooms_tracker`) restores on chat switch
-- [ ] Loading intro plays (film-credits / typewriter / off)
+- (Loading intro removed by design — feature deleted, ported from test/auto-portraits)
 - [ ] i18n: switch en → ru → zh-tw → en; all visible labels update
 - [ ] System Log and Notification Log capture entries; Copy All works
 
