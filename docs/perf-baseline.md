@@ -75,4 +75,45 @@ Code-level counts (baseline):
 | Dead CSS removed | — | combat-encounter modal (~137 rules) + checkpoint styles |
 | Delegation audit | — | render modules (infoBox, quests, thoughts, portraitBar, bubble TTS) already container-delegated; no render-loop bindings found. Remaining per-element bindings are settings controls (restructured in Phase 5). |
 
-(Add a table per phase as completed.)
+### Phase 3 — render scheduler + incremental hot paths (DONE)
+- New `src/core/scheduler.js` (one rAF flush/frame, read-before-write, key-deduped) and `src/utils/domDiff.js` (`keyedReconcile`).
+- Portrait bar: full `.html()` rebuild → keyed in-place diff with per-card HTML cache; entrance effects only for genuinely new cards.
+- Thoughts panel: keyed per-card diff inside a persistent wrapper; scroll/flip/focus state survives.
+- Scene transitions: full chat re-walk → incremental (only new messages); full pass only on chat change/swipe/delete/style change.
+- Chat bubbles: original HTML moved from `data-dooms-original-html` attributes into a WeakMap (GC'd with the element).
+
+### Phase 4 — canvas particle engine (DONE)
+- All high-count particles (snow 50 / rain 100 / mist 5 / wind 30 / stars 68 / fireflies 15 / motes 25 / orbs 6) render on ONE canvas with ONE rAF loop; loop hard-stops on tab hide, reduced-motion, perf mode, or no effects. DOM keeps only ≤6 gradient overlays per scene.
+- Weather keyword scan memoized; particle budgets scale down on small/low-core devices.
+- style.css running total: 579,707 → 479,306 bytes.
+
+### Phase 5 — deferred settings UI (DONE)
+- template.html (165KB, all modal UI) + ~1,500 lines of control binding/population now load on FIRST modal open, not at startup. All entry points (FAB, dropdown button, WI interception, portrait context menu) gate on `ensureSettingsUI()`.
+
+### Phase 6a — dynamic imports (DONE)
+- Lorebook cluster + workshop + roster + character sheet + tracker editor (~9,200 lines JS) load only when a DES modal opens.
+
+### Phase 7 — CSS split + performance mode (DONE)
+- Eager style.css: 567KB baseline → 308KB. styles/modals.css (157KB) with deferred UI; styles/weather.css (17KB) and styles/loading-intro.css (5KB) conditional.
+- Performance Mode toggle: body class pauses the particle engine + `styles/perf-mode.css` kill-sheet (injected only while on) strips all DES animations/transitions/backdrop-filters/filters.
+
+### Phase 8 — compact prompts (DONE)
+- `compactPrompts` (fresh installs: on; existing installs: off to preserve tuned behavior): ~halves the per-generation tracker instruction text with an identical JSON contract. Toggle in Advanced.
+
+### Phase 9 — final (DONE)
+- All caches audited (roster-bounded, TTL'd, or capped); swipe data remains per-message/per-swipe as before. manifest version → 1.12.0.
+
+## Headline summary vs baseline (static, measured in repo)
+
+| Metric | Baseline (ce4c73c) | Rebuild |
+|---|---|---|
+| Eager CSS | 579,707 B | 308KB core (modals/weather/intro lazy) |
+| Eager HTML parsed at startup | 168,652 B template | 0 (deferred to first modal open) |
+| Eager JS modules | all (~32,600 lines) | ~9,200 lines deferred to first modal open |
+| Icon assets | 405KB | 9KB |
+| DOM particle nodes (weather worst case) | ~100+ CSS-animated layers | 1 canvas + ≤6 overlay divs |
+| MutationObservers | 3 | 0 |
+| Per-message render | full rebuilds (portrait bar, thoughts, transitions walk) | keyed diffs + incremental, one rAF flush per frame |
+| Per-message original-HTML copies | DOM attribute per message | WeakMap (GC'd) |
+| Tracker prompt (full setup) | ~2,700–3,000 chars | ~half with compactPrompts on |
+| Idle GPU when tab hidden / perf mode | CSS animations kept compositing (pre-ce4c73c) | hard-stopped rAF + kill-sheet |

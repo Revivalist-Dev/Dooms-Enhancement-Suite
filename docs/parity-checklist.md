@@ -96,6 +96,15 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Virtual keyboard resize fix still active
 - [ ] Desktop tabs and strip widgets (clock/date/location) work
 
+## New in the Rebuild (verify both states)
+- [ ] Performance Mode toggle (Display section): on -> animations/blur/particles stop,
+      off -> restored without reload
+- [ ] Compact Tracker Prompt toggle (Advanced): tracker JSON parses identically in both modes
+- [ ] First open of any DES modal (settings, sheet, workshop, roster, lorebook, logs,
+      editors) loads the deferred UI exactly once; everything works identically after
+- [ ] Weather/snowflake visuals on canvas match the old CSS particles per type
+      (snow/rain/mist/wind/clear day/night/dawn/dusk, storm, blizzard)
+
 ## Feature toggle cycling (added requirement from rebuild)
 For EACH feature: disable mid-session → no DOM residue, no console errors;
 re-enable → feature fully functional without page reload; repeat twice
