@@ -10,12 +10,43 @@
  * unlike a data attribute which doubled every message's DOM footprint).
  */
 import { extensionSettings } from '../../core/state.js';
-import { getActiveCharacterColors, getActiveKnownCharacters } from '../../core/persistence.js';
+import { getActiveCharacterColors, getActiveKnownCharacters, saveCharacterRosterChange } from '../../core/persistence.js';
 import { resolvePortrait, resolveFullPortrait, getCharacterList } from '../ui/portraitBar.js';
 import { hexToRgb } from './sceneHeaders.js';
 import { executeSlashCommandsOnChatInput } from '../../../../../../../scripts/slash-commands.js';
 import { chat } from '../../../../../../../script.js';
 import { isSyntheticTrackerMessage } from '../../utils/messageGuards.js';
+
+/**
+ * Extract character entries from characterThoughts data. Inlined here
+ * (rather than imported from apiClient.js) to avoid the circular
+ * dependency rendering → apiClient → rendering. Mirrors
+ * parseCharacterEntriesFromThoughts() in apiClient.js — keep in sync
+ * if that one's parsing changes.
+ */
+function _extractCharacterEntries(characterThoughtsData) {
+    if (!characterThoughtsData) return [];
+    try {
+        const parsed = typeof characterThoughtsData === 'string'
+            ? JSON.parse(characterThoughtsData)
+            : characterThoughtsData;
+        const arr = Array.isArray(parsed) ? parsed : (parsed.characters || []);
+        return arr.filter(c => c && c.name && String(c.name).toLowerCase() !== 'unavailable');
+    } catch {
+        // Legacy text format fallback.
+        const lines = String(characterThoughtsData).split('\n');
+        const out = [];
+        for (const line of lines) {
+            if (line.trim().startsWith('- ')) {
+                const name = line.trim().slice(2).trim();
+                if (name && name.toLowerCase() !== 'unavailable') out.push({ name });
+            }
+        }
+        return out;
+    }
+}
+
+}
 
 /**
  * Original (pre-bubble) HTML per .mes_text element. Entries disappear with
@@ -90,12 +121,144 @@ function getAssignedColor(speakerName) {
     return null;
 }
 
-/** Build a map from lowercase hex colour → character name */
+/**
+ * Sync the color → speaker mapping from the AI's tracker output into
+ * characterColors so the bubble splitter has an authoritative source
+ * instead of guessing from surrounding narration.
+ *
+ * Two paths, in priority order:
+ *
+ *   PRIMARY (Option A): each character entry in characterThoughts is
+ *   expected to carry an explicit `color` field that the AI sets to
+ *   match the <font color> hex it uses for that character's dialogue.
+ *   When present, this is the authoritative mapping — no inference
+ *   needed. Added by buildCharactersJSONInstruction() when dialogue
+ *   coloring is enabled.
+ *
+ *   FALLBACK (heuristic): for characters whose entry lacks an explicit
+ *   color (smaller models drop the field, older chats with characters
+ *   that predate the schema, etc.), pair "new colors appearing in the
+ *   message" with "characters present this turn that don't have a
+ *   color yet" in order of first appearance. Counts often won't match
+ *   cleanly; we register as many as we can and let the
+ *   surrounding-narration fallback in detectSpeaker() catch the rest.
+ *
+ *   Existing assignments are NEVER overwritten — once a character has
+ *   a color, this function only fills in gaps. To deliberately reassign
+ *   a color, do it through the Character Workshop or Roster.
+ *
+ * Called from onMessageReceived after the parser has committed
+ * lastGeneratedData.characterThoughts and before applyChatBubbles runs.
+ *
+ * @param {string} messageText - the raw .mes string (contains <font> tags)
+ * @param {string|object} characterThoughtsData - parsed/raw characterThoughts
+ * @returns {number} number of (color, name) pairs registered this call
+ */
+export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
+    if (!characterThoughtsData) return 0;
+
+    const colors = getActiveCharacterColors() || {};
+    const presentChars = _extractCharacterEntries(characterThoughtsData);
+    if (presentChars.length === 0) return 0;
+
+    const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+    const registered = [];
+
+    // ─── Primary path: trust the AI's explicit color field ────────────────
+    // Characters that already have a color in characterColors are left
+    // alone — the entry's color field on this turn may differ, but the
+    // user's stored mapping wins until they explicitly clear/change it.
+    for (const entry of presentChars) {
+        const name = entry && entry.name;
+        if (!name || typeof name !== 'string') continue;
+        if (colors[name]) continue;
+        const proposed = typeof entry.color === 'string' ? entry.color.trim().toLowerCase() : '';
+        if (!HEX_RE.test(proposed)) continue;
+        colors[name] = proposed;
+        registered.push(`${name} → ${proposed} (from JSON)`);
+    }
+
+    // ─── Fallback path: positional pairing from message font tags ─────────
+    // Only runs for characters still without a color after the primary
+    // pass — i.e. the AI dropped the color field but did paint dialogue.
+    if (typeof messageText === 'string' && messageText) {
+        const knownColors = new Set(
+            Object.values(colors).filter(Boolean).map(c => String(c).toLowerCase())
+        );
+        const fontTagRegex = /<font\s+color=["']?(#[0-9a-fA-F]{6})["']?>/gi;
+        const newColors = [];
+        const seenColors = new Set();
+        let m;
+        while ((m = fontTagRegex.exec(messageText)) !== null) {
+            const color = m[1].toLowerCase();
+            if (seenColors.has(color)) continue;
+            seenColors.add(color);
+            if (knownColors.has(color)) continue;
+            newColors.push(color);
+        }
+        if (newColors.length > 0) {
+            const newNames = [];
+            for (const entry of presentChars) {
+                const name = entry && entry.name;
+                if (!name || typeof name !== 'string') continue;
+                if (colors[name]) continue;
+                newNames.push(name);
+            }
+            const pairCount = Math.min(newColors.length, newNames.length);
+            for (let i = 0; i < pairCount; i++) {
+                colors[newNames[i]] = newColors[i];
+                registered.push(`${newNames[i]} → ${newColors[i]} (heuristic)`);
+            }
+        }
+    }
+
+    if (registered.length === 0) return 0;
+
+    try { saveCharacterRosterChange(); } catch (e) {
+        console.warn('[Dooms Tracker] harvestNewSpeakerColors: save failed', e);
+    }
+    console.log(`[Dooms Tracker] Registered ${registered.length} new speaker color${registered.length === 1 ? '' : 's'}: ${registered.join(', ')}`);
+    return registered.length;
+}
+
+/** Build a color → speaker-name lookup for the bubble splitter.
+ *
+ *  Includes every known character in the current chat — present AND
+ *  off-screen — so a character keeps a consistent color even when they
+ *  are not in this turn's scene (e.g. quoted in a flashback or speaking
+ *  from elsewhere).
+ *
+ *  Collision handling: the AI sometimes reuses a color it previously
+ *  assigned to an absent character for a brand-new on-screen speaker. To
+ *  keep that from attributing the new speaker's lines to the absent
+ *  character, we build the map in two passes — absent-but-known first,
+ *  present second — so a present speaker's color overrides any absent
+ *  character that happens to share it. Off-screen characters only own a
+ *  color that no present character has claimed. */
 function buildColorToSpeakerMap() {
     const map = new Map();
     const colors = getActiveCharacterColors();
+    const list = getCharacterList();
+    const knownNames = new Set(
+        list.map(c => String(c?.name || '').toLowerCase()).filter(Boolean)
+    );
+    const presentNames = new Set(
+        list.filter(c => c && c.present !== false)
+            .map(c => String(c.name || '').toLowerCase())
+            .filter(Boolean)
+    );
+    // Pass 1: absent-but-known characters in this chat (lower priority).
     for (const [name, color] of Object.entries(colors)) {
-        if (color) map.set(color.toLowerCase(), name);
+        if (!color) continue;
+        const lower = name.toLowerCase();
+        if (!knownNames.has(lower) || presentNames.has(lower)) continue;
+        map.set(color.toLowerCase(), name);
+    }
+    // Pass 2: present characters override on a shared color.
+    for (const [name, color] of Object.entries(colors)) {
+        if (!color) continue;
+        if (!presentNames.has(name.toLowerCase())) continue;
+        map.set(color.toLowerCase(), name);
     }
     return map;
 }
