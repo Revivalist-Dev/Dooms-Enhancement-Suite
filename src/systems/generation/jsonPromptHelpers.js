@@ -94,29 +94,42 @@ export function buildInfoBoxJSONInstruction() {
         instruction += (hasFields ? ',\n' : '') + '  "recentEvents": ["1-2 brief major events only"]';
         hasFields = true;
     }
+    const compact = extensionSettings.compactPrompts !== false;
     if (widgets.moonPhase?.enabled) {
-        instruction += (hasFields ? ',\n' : '') + '  "moonPhase": "Current moon phase (New Moon / Waxing Crescent / First Quarter / Waxing Gibbous / Full Moon / Waning Gibbous / Last Quarter / Waning Crescent)"';
+        instruction += (hasFields ? ',\n' : '') + (compact
+            ? '  "moonPhase": "New Moon|Waxing Crescent|First Quarter|Waxing Gibbous|Full Moon|Waning Gibbous|Last Quarter|Waning Crescent"'
+            : '  "moonPhase": "Current moon phase (New Moon / Waxing Crescent / First Quarter / Waxing Gibbous / Full Moon / Waning Gibbous / Last Quarter / Waning Crescent)"');
         hasFields = true;
     }
     if (widgets.tension?.enabled) {
-        instruction += (hasFields ? ',\n' : '') + '  "tension": "Overall scene tension (Calm / Uneasy / Tense / Hostile / Volatile / Intimate)"';
+        instruction += (hasFields ? ',\n' : '') + (compact
+            ? '  "tension": "Calm|Uneasy|Tense|Hostile|Volatile|Intimate"'
+            : '  "tension": "Overall scene tension (Calm / Uneasy / Tense / Hostile / Volatile / Intimate)"');
         hasFields = true;
     }
     if (widgets.timeSinceRest?.enabled) {
-        instruction += (hasFields ? ',\n' : '') + '  "timeSinceRest": "Time since the player character last slept or rested (e.g. \\"6 hours\\", \\"2 days\\")"';
+        instruction += (hasFields ? ',\n' : '') + (compact
+            ? '  "timeSinceRest": "Time since player last rested, e.g. \\"6 hours\\""'
+            : '  "timeSinceRest": "Time since the player character last slept or rested (e.g. \\"6 hours\\", \\"2 days\\")"');
         hasFields = true;
     }
     if (widgets.conditions?.enabled) {
-        instruction += (hasFields ? ',\n' : '') + '  "conditions": "Comma-separated active physical or magical conditions on the player (e.g. \\"Transformed, Poisoned\\" or \\"None\\")"';
+        instruction += (hasFields ? ',\n' : '') + (compact
+            ? '  "conditions": "Active conditions on the player, comma-separated, or \\"None\\""'
+            : '  "conditions": "Comma-separated active physical or magical conditions on the player (e.g. \\"Transformed, Poisoned\\" or \\"None\\")"');
         hasFields = true;
     }
     if (widgets.terrain?.enabled) {
-        instruction += (hasFields ? ',\n' : '') + '  "terrain": "General terrain or environment type at the current location (e.g. \\"Dense Forest\\", \\"City Streets\\", \\"Underground Dungeon\\")"';
+        instruction += (hasFields ? ',\n' : '') + (compact
+            ? '  "terrain": "Terrain/environment type, e.g. \\"Dense Forest\\""'
+            : '  "terrain": "General terrain or environment type at the current location (e.g. \\"Dense Forest\\", \\"City Streets\\", \\"Underground Dungeon\\")"');
         hasFields = true;
     }
     // Doom Counter: inject numeric tension scale (1-10) for automated tension tracking
     if (extensionSettings.doomCounter?.enabled) {
-        instruction += (hasFields ? ',\n' : '') + '  "doomTension": <number 1-10 rating the current scene tension. 1=completely calm/peaceful/boring, 5=moderate tension/anticipation, 10=extreme danger/conflict/crisis>';
+        instruction += (hasFields ? ',\n' : '') + (compact
+            ? '  "doomTension": <number 1-10: scene tension, 1=calm, 5=moderate, 10=crisis>'
+            : '  "doomTension": <number 1-10 rating the current scene tension. 1=completely calm/peaceful/boring, 5=moderate tension/anticipation, 10=extreme danger/conflict/crisis>');
         hasFields = true;
     }
     instruction += '\n}';
@@ -180,5 +193,8 @@ export function buildCharactersJSONInstruction() {
  * @returns {string} Instruction with lock information added
  */
 export function addLockInstruction(baseInstruction) {
+    if (extensionSettings.compactPrompts !== false) {
+        return baseInstruction + '\n\nIMPORTANT: Any field with "locked": true must keep its exact previous value. Omit "locked" on unlocked items.';
+    }
     return baseInstruction + '\n\nIMPORTANT: If an item, stat, quest, or field has "locked": true in its object, you MUST NOT change its value. Keep it exactly as it appears in the previous trackers. Only unlocked items can be modified. The "locked" field should ONLY be included if the item is actually locked - omit it for unlocked items.';
 }

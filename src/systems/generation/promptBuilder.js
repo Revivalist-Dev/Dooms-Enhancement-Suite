@@ -161,13 +161,18 @@ export function generateTrackerInstructions(includeHtmlPrompt = true, includeCon
     // Check if any trackers are enabled
     const hasAnyTrackers = extensionSettings.showQuests || extensionSettings.showInfoBox || extensionSettings.showCharacterThoughts;
     // Only add tracker instructions if at least one tracker is enabled
+    const compact = extensionSettings.compactPrompts !== false;
     if (hasAnyTrackers) {
         // Universal instruction header
-        instructions += '\nAt the start of every reply, you must attach an update to the trackers in EXACTLY the JSON format shown below as a single unified JSON object containing all enabled tracker fields. ';
+        instructions += compact
+            ? '\nStart every reply with ONE JSON code block updating the trackers, exactly in the format shown below. '
+            : '\nAt the start of every reply, you must attach an update to the trackers in EXACTLY the JSON format shown below as a single unified JSON object containing all enabled tracker fields. ';
         // Append custom instruction portion if available
         const customPrompt = extensionSettings.customTrackerInstructionsPrompt;
         if (customPrompt) {
             instructions += customPrompt.replace(/{userName}/g, userName);
+        } else if (compact) {
+            instructions += `Replace every placeholder with concrete in-world details ${userName} perceives (e.g. "Location" -> "Forest Clearing"); numbers replace X. Exclude ${userName} from "characters" — NPCs only. Carry the previous trackers forward, changing values realistically per the user's actions, time passing, and consequences.`;
         } else {
             instructions += `Replace X with actual numbers (e.g., 69) and replace all placeholders with concrete in-world details that ${userName} perceives about the current scene and the present characters. For example: "Location" becomes "Forest Clearing", "Mood Emoji" becomes "😊". DO NOT include ${userName} in the characters section, only NPCs. `;
             instructions += `Consider the last trackers in the conversation (if they exist). Manage them accordingly and realistically; raise, lower, change, or keep the values unchanged based on the user's actions, the passage of time, and logical consequences.`;
@@ -205,13 +210,17 @@ export function generateTrackerInstructions(includeHtmlPrompt = true, includeCon
                 const charactersJSON = buildCharactersJSONInstruction();
                 instructions += charactersJSON.split('\n').map((line, i) => i === 0 ? line : '  ' + line).join('\n');
             }
-            instructions += '\n}\n```\n\nDo NOT output multiple separate JSON objects. Everything must be in ONE unified object with the keys shown above.';
+            instructions += compact
+                ? '\n}\n```\n\nONE unified JSON object only — never separate blocks.'
+                : '\n}\n```\n\nDo NOT output multiple separate JSON objects. Everything must be in ONE unified object with the keys shown above.';
         }
         // Only add continuation instruction if includeContinuation is true
         if (includeContinuation) {
             const customPrompt = extensionSettings.customTrackerContinuationPrompt;
             if (customPrompt) {
                 instructions += '\n\n' + customPrompt + '\n\n';
+            } else if (compact) {
+                instructions += '\n\nThen continue the story directly from the last message, letting the tracker state (environment, moods, conditions) naturally shape the narrative. Replace every bracketed placeholder with real content — no brackets in the output.\n\n';
             } else {
                 instructions += `\n\nAfter updating the trackers, continue directly from where the last message in the chat history left off. Ensure the trackers you provide naturally reflect and influence the narrative. Character behavior, dialogue, and story events should acknowledge these conditions when relevant, such as environmental factors shaping the scene, a character's emotional state coloring their responses, and so on. Remember, all bracketed placeholders (e.g., [Location], [Mood Emoji]) MUST be replaced with actual content without the square brackets.\n\n`;
             }

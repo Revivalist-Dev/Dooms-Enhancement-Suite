@@ -135,6 +135,7 @@ export let extensionSettings = {
     },
     enableAnimations: true, // Enable smooth animations for content updates
     performanceMode: false, // Kill animations/blur/transitions + pause particles for minimum GPU/CPU cost
+    compactPrompts: true, // Use terser tracker instructions (~40% fewer tokens); set false to restore verbose v1 phrasing
     mobileFabPosition: {
         top: 'calc(var(--topBarBlockSize) + 60px)',
         right: '12px'

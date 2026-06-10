@@ -1623,6 +1623,13 @@
                     <i class="fa-solid fa-chevron-down rpg-accordion-chevron"></i>
                 </div>
                 <div class="rpg-accordion-body">
+                    <div class="rpg-setting-row" title="Terser tracker instructions (~40% fewer prompt tokens). Turn off to restore the original verbose phrasing if your model's tracker output degrades.">
+                        <span class="rpg-setting-label">Compact Tracker Prompt</span>
+                        <label class="rpg-toggle-switch">
+                            <input type="checkbox" id="rpg-toggle-compact-prompts" />
+                            <span class="rpg-toggle-slider"></span>
+                        </label>
+                    </div>
                     <button id="rpg-open-prompts-editor" class="rpg-accordion-action-btn" type="button">
                         <i class="fa-solid fa-file-lines"></i> Customize Prompts
                     </button>

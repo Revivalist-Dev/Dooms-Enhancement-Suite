@@ -637,6 +637,10 @@ function bindSettingsUI() {
         saveSettings();
         applyPerformanceMode();
     });
+    $('#rpg-toggle-compact-prompts').on('change', function () {
+        extensionSettings.compactPrompts = $(this).prop('checked');
+        saveSettings();
+    });
     $('#rpg-toggle-thoughts').on('change', function () {
         extensionSettings.showCharacterThoughts = $(this).prop('checked');
         saveSettings();
@@ -1706,6 +1710,7 @@ function bindSettingsUI() {
     // Display
     $('#rpg-toggle-info-box').prop('checked', extensionSettings.showInfoBox);
     $('#rpg-toggle-performance-mode').prop('checked', !!extensionSettings.performanceMode);
+    $('#rpg-toggle-compact-prompts').prop('checked', extensionSettings.compactPrompts !== false);
     $('#rpg-toggle-thoughts').prop('checked', extensionSettings.showCharacterThoughts);
     $('#rpg-toggle-quests').prop('checked', extensionSettings.showQuests);
     // Lock Icons toggle removed — lock UI disabled until wired into scene tracker

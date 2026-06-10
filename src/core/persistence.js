@@ -469,6 +469,14 @@ export function loadSettings() {
                 settingsChanged = true;
             }
 
+            // Compact tracker prompts (Rebuild): terser instruction text.
+            // Existing installs keep the verbose prompts their setups were
+            // tuned on; fresh installs get the compact default from state.js.
+            if (extensionSettings.compactPrompts === undefined) {
+                extensionSettings.compactPrompts = false;
+                settingsChanged = true;
+            }
+
             // Save migrated settings
             if (settingsChanged) {
                 saveSettings();
