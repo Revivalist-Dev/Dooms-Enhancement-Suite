@@ -25,6 +25,7 @@ import { migrateAvatarsToFiles } from '../../utils/avatarMigration.js';
 import { openCharacterSheet } from './characterSheet.js';
 import { keyedReconcile } from '../../utils/domDiff.js';
 import { schedule } from '../../core/scheduler.js';
+import { ensureSettingsUI } from '../../core/lazyUI.js';
 
 /** Supported image extensions to probe for, in priority order */
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
@@ -362,9 +363,13 @@ export function initPortraitBar() {
         if (action === 'remove-character') {
             removeCharacter(characterName);
         } else if (action === 'character-sheet') {
-            openCharacterSheet(characterName);
+            // Character sheet popup lives in the deferred settings template
+            ensureSettingsUI().then(() => openCharacterSheet(characterName)).catch(() => {});
         } else if (action === 'open-workshop') {
-            window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName, isUser } }));
+            // Workshop listener registers when the deferred settings UI loads
+            ensureSettingsUI().then(() => {
+                window.dispatchEvent(new CustomEvent('dooms:open-workshop', { detail: { characterName, isUser } }));
+            }).catch(() => {});
         } else if (action === 'cancel-inject') {
             window.dispatchEvent(new CustomEvent('dooms:cancel-inject', { detail: { name: characterName } }));
         }
@@ -374,7 +379,10 @@ export function initPortraitBar() {
     $('#dooms-pb-open-roster').on('click', function (e) {
         e.stopPropagation();
         if (extensionSettings.showPortraitBar === false) return;
-        window.dispatchEvent(new CustomEvent('dooms:open-roster'));
+        // Roster listener registers when the deferred settings UI loads
+        ensureSettingsUI().then(() => {
+            window.dispatchEvent(new CustomEvent('dooms:open-roster'));
+        }).catch(() => {});
     });
     // Hide the roster button when PCP is off (Workshop is part of PCP).
     if (extensionSettings.showPortraitBar === false) {

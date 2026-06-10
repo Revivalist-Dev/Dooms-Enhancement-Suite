@@ -32,6 +32,7 @@ import {
 } from './src/core/state.js';
 import { loadSettings, saveSettings, saveChatData, loadChatData, updateMessageSwipeData } from './src/core/persistence.js';
 import { registerAllEvents } from './src/core/events.js';
+import { registerSettingsUIInitializer, ensureSettingsUI } from './src/core/lazyUI.js';
 // Generation & Parsing modules
 import {
     generateTrackerExample,
@@ -217,12 +218,14 @@ async function addExtensionSettings() {
     }
     // Set up "Open Settings" button in the extension dropdown
     $('#dooms-open-settings-btn').on('click', function () {
-        const modal = getSettingsModal();
-        if (modal) {
-            modal.open();
-        } else {
-            $('#rpg-settings-popup').show();
-        }
+        ensureSettingsUI().then(() => {
+            const modal = getSettingsModal();
+            if (modal) {
+                modal.open();
+            } else {
+                $('#rpg-settings-popup').show();
+            }
+        }).catch(() => {});
     });
     // "Star on GitHub" button in the extension dropdown
     $('#dooms-github-star-btn').on('click', function () {
@@ -507,20 +510,25 @@ function loadChatBubbleSettingsUI() {
 }
 
 /**
- * Initializes the UI for the extension.
+ * Hides/shows SillyTavern's top bar based on the FAB setting. Module-scope
+ * because it must apply at startup, before the settings binder has run.
  */
-async function initUI() {
-    console.log('[Dooms Tracker] initUI() called');
-    // Initialize i18n
-    await i18n.init();
-    console.log('[Dooms Tracker] i18n initialized');
-    // Only initialize UI if extension is enabled
-    if (!extensionSettings.enabled) {
-        console.log('[Dooms Tracker] Extension disabled - skipping UI initialization');
-        return;
-    }
-    console.log('[Dooms Tracker] Extension is enabled, loading template...');
-    console.log('[Dooms Tracker] extensionName =', extensionName);
+function applyHideStTopBar() {
+    const shouldHide = !!(extensionSettings.fab && extensionSettings.fab.hideStTopBar);
+    document.body.classList.toggle('dooms-hide-st-topbar', shouldHide);
+    // Also hide TopInfoBar extension
+    $('#extensionTopBar').toggle(!shouldHide);
+}
+
+/**
+ * Loads template.html (the settings popup + every DES modal — none of it is
+ * needed for normal chat rendering) and runs all template-dependent setup.
+ * Invoked lazily through ensureSettingsUI() the first time a DES modal is
+ * opened, instead of spending the ~165KB HTML parse and ~800 control
+ * bindings/populations at startup.
+ */
+async function loadSettingsTemplate() {
+    console.log('[Dooms Tracker] Loading deferred settings UI...');
     // Load the HTML template using SillyTavern's template system
     const templateHtml = await renderExtensionTemplateAsync(extensionName, 'template');
     console.log('[Dooms Tracker] Template loaded, length =', templateHtml?.length || 0);
@@ -540,6 +548,28 @@ async function initUI() {
     try { setupLorebookModal(); } catch (e) { console.error('[Dooms Tracker] setupLorebookModal() FAILED:', e); }
     // Re-apply translations to the entire body to catch all new elements from the template
     i18n.applyTranslations(document.body);
+    bindSettingsUI();
+    try { initCharacterSheet(); console.log('[Dooms Tracker] initCharacterSheet() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterSheet() FAILED:', e); }
+    try { initCharacterWorkshop(); console.log('[Dooms Tracker] initCharacterWorkshop() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterWorkshop() FAILED:', e); }
+    try { initCharacterRoster(); console.log('[Dooms Tracker] initCharacterRoster() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterRoster() FAILED:', e); }
+    try { setupSettingsPopup(); console.log('[Dooms Tracker] setupSettingsPopup() OK'); } catch (e) { console.error('[Dooms Tracker] setupSettingsPopup() FAILED:', e); }
+    try { initTrackerEditor(); console.log('[Dooms Tracker] initTrackerEditor() OK'); } catch (e) { console.error('[Dooms Tracker] initTrackerEditor() FAILED:', e); }
+    try { initPromptsEditor(); console.log('[Dooms Tracker] initPromptsEditor() OK'); } catch (e) { console.error('[Dooms Tracker] initPromptsEditor() FAILED:', e); }
+    // The FAB was built at startup; now that the popup exists, fill its
+    // per-button toggle list and stamp the current theme on the modal.
+    if (typeof window.__doomsFabPopulateToggles === 'function') window.__doomsFabPopulateToggles();
+    try { updateSettingsPopupTheme(getSettingsModal()); } catch (_) { }
+    // Custom-colors section visibility depends on the current theme; the
+    // eager call at startup ran before the popup existed.
+    try { toggleCustomColors(); } catch (_) { }
+    console.log('[Dooms Tracker] Deferred settings UI ready');
+}
+
+/**
+ * Binds and populates every control in the settings popup. Extracted
+ * verbatim from initUI(); runs once, after template.html is appended.
+ */
+function bindSettingsUI() {
     // ── Accordion toggle behavior ──
     // Use delegated handler so it doesn't block other delegated handlers (like prompts editor)
     $(document).on('click', '.rpg-accordion-header', function () {
@@ -1359,11 +1389,6 @@ async function initUI() {
         applyAllChatBubbles();
     });
 
-    // Ticker click delegation — expand/collapse
-    // Uses $(document) delegation since the ticker is appended to <body> (position:fixed)
-    $(document).on('click', '.dooms-info-ticker', function () {
-        $(this).closest('.dooms-info-ticker-wrapper').toggleClass('expanded');
-    });
 
     $('#rpg-toggle-thoughts-in-chat').on('change', function () {
         extensionSettings.showThoughtsInChat = $(this).prop('checked');
@@ -1440,27 +1465,6 @@ async function initUI() {
         saveSettings();
     });
     $('#rpg-open-lorebook').on('click', function () {
-        const modal = getLorebookModal();
-        if (modal) modal.open();
-    });
-    // ── Intercept ST's native World Info button ──
-    $('#WI-SP-button .drawer-toggle').on('click.rpgLorebook', function (e) {
-        // Only intercept if lorebook manager is enabled
-        if (!extensionSettings.lorebook?.enabled) return; // let ST handle it normally
-
-        // Prevent ST's doNavbarIconClick from firing
-        e.stopImmediatePropagation();
-        e.preventDefault();
-
-        // If the WI drawer is already open, close it first
-        const $drawer = $('#WorldInfo');
-        const $icon = $('#WIDrawerIcon');
-        if ($drawer.hasClass('openDrawer')) {
-            $icon.removeClass('openIcon').addClass('closedIcon');
-            $drawer.removeClass('openDrawer').addClass('closedDrawer');
-        }
-
-        // Open our Lorebook Manager modal
         const modal = getLorebookModal();
         if (modal) modal.open();
     });
@@ -1858,8 +1862,8 @@ async function initUI() {
     $('#rpg-dc-trap-mode').prop('checked', dc.trapMode || false);
     $('#rpg-dc-debug-display').prop('checked', dc.debugDisplay || false);
     updateDoomCounterUI();
-    // Initialize Doom Counter toast button listener
-    initDoomCounterListener();
+    // (Doom Counter toast listener is registered eagerly in initUI — it must
+    // work before the settings UI has ever been opened.)
 
     // Name Ban
     const nb = extensionSettings.nameBan || {};
@@ -1884,12 +1888,6 @@ async function initUI() {
         extensionSettings.fab.bypassFlyout = $(this).prop('checked');
         saveSettings();
     });
-    const applyHideStTopBar = () => {
-        const shouldHide = !!extensionSettings.fab.hideStTopBar;
-        document.body.classList.toggle('dooms-hide-st-topbar', shouldHide);
-        // Also hide TopInfoBar extension
-        $('#extensionTopBar').toggle(!shouldHide);
-    };
     $('#rpg-toggle-hide-st-topbar').prop('checked', !!extensionSettings.fab.hideStTopBar);
     $('#rpg-toggle-hide-st-topbar').off('change.fab').on('change.fab', function () {
         extensionSettings.fab.hideStTopBar = $(this).prop('checked');
@@ -2077,6 +2075,63 @@ async function initUI() {
     // Chat Bubbles & Info Panel
     loadChatBubbleSettingsUI();
     applyChatBubbleSettings();
+}
+
+/**
+ * Initializes the UI for the extension.
+ */
+async function initUI() {
+    console.log('[Dooms Tracker] initUI() called');
+    // Initialize i18n
+    await i18n.init();
+    console.log('[Dooms Tracker] i18n initialized');
+    // Only initialize UI if extension is enabled
+    if (!extensionSettings.enabled) {
+        console.log('[Dooms Tracker] Extension disabled - skipping UI initialization');
+        return;
+    }
+    console.log('[Dooms Tracker] Extension is enabled');
+    // The settings popup and all other DES modals (template.html) load
+    // lazily on first open — see loadSettingsTemplate().
+    registerSettingsUIInitializer(loadSettingsTemplate);
+    // Translate the eager UI (settings dropdown, FAB) now; the deferred
+    // template re-applies translations when it loads.
+    i18n.applyTranslations(document.body);
+    // Ticker click delegation — expand/collapse
+    // Uses $(document) delegation since the ticker is appended to <body> (position:fixed)
+    $(document).on('click', '.dooms-info-ticker', function () {
+        $(this).closest('.dooms-info-ticker-wrapper').toggleClass('expanded');
+    });
+    // ── Intercept ST's native World Info button ──
+    $('#WI-SP-button .drawer-toggle').on('click.rpgLorebook', function (e) {
+        // Only intercept if lorebook manager is enabled
+        if (!extensionSettings.lorebook?.enabled) return; // let ST handle it normally
+
+        // Prevent ST's doNavbarIconClick from firing
+        e.stopImmediatePropagation();
+        e.preventDefault();
+
+        // If the WI drawer is already open, close it first
+        const $drawer = $('#WorldInfo');
+        const $icon = $('#WIDrawerIcon');
+        if ($drawer.hasClass('openDrawer')) {
+            $icon.removeClass('openIcon').addClass('closedIcon');
+            $drawer.removeClass('openDrawer').addClass('closedDrawer');
+        }
+
+        // Open our Lorebook Manager modal (loads the deferred settings UI first)
+        ensureSettingsUI().then(() => {
+            const modal = getLorebookModal();
+            if (modal) modal.open();
+        }).catch(() => {});
+    });
+    // Global appliers that used to run with the (now-deferred) settings
+    // binder: bubble CSS settings, ST top-bar visibility, the doom-counter
+    // trigger listener, and fullsheet import buttons on the initial chat.
+    try { applyChatBubbleSettings(); } catch (e) { console.error('[Dooms Tracker] applyChatBubbleSettings() FAILED:', e); }
+    try { applyHideStTopBar(); } catch (e) { console.error('[Dooms Tracker] applyHideStTopBar() FAILED:', e); }
+    try { initDoomCounterListener(); } catch (e) { console.error('[Dooms Tracker] initDoomCounterListener() FAILED:', e); }
+    setTimeout(() => { try { injectFullSheetButtons(); } catch (_) { } }, 100);
     if (extensionSettings.chatBubbleSettings?.hideStAvatar) {
         document.body.classList.add('dooms-hide-st-avatar');
     }
@@ -2092,9 +2147,6 @@ async function initUI() {
     try { updateChatSceneHeaders(); console.log('[Dooms Tracker] updateChatSceneHeaders() OK'); } catch (e) { console.error('[Dooms Tracker] updateChatSceneHeaders() FAILED:', e); }
     // Info panel is now a scene tracker layout mode — no separate updateInfoPanel() needed
     try { initPortraitBar(); console.log('[Dooms Tracker] initPortraitBar() OK'); } catch (e) { console.error('[Dooms Tracker] initPortraitBar() FAILED:', e); }
-    try { initCharacterSheet(); console.log('[Dooms Tracker] initCharacterSheet() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterSheet() FAILED:', e); }
-    try { initCharacterWorkshop(); console.log('[Dooms Tracker] initCharacterWorkshop() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterWorkshop() FAILED:', e); }
-    try { initCharacterRoster(); console.log('[Dooms Tracker] initCharacterRoster() OK'); } catch (e) { console.error('[Dooms Tracker] initCharacterRoster() FAILED:', e); }
     try { initExpressionSync(); console.log('[Dooms Tracker] initExpressionSync() OK'); } catch (e) { console.error('[Dooms Tracker] initExpressionSync() FAILED:', e); }
     try { initWeatherEffects(); console.log('[Dooms Tracker] initWeatherEffects() OK'); } catch (e) { console.error('[Dooms Tracker] initWeatherEffects() FAILED:', e); }
     // Add settings button as a fixed-position element on <body> so it's
@@ -2121,8 +2173,10 @@ async function initUI() {
         const fabEl = document.getElementById('dooms-settings-fab');
         let suppressClick = false;
         const openSettingsDirect = () => {
-            const modal = getSettingsModal();
-            if (modal) { modal.open(); } else { $('#rpg-settings-popup').show(); }
+            ensureSettingsUI().then(() => {
+                const modal = getSettingsModal();
+                if (modal) { modal.open(); } else { $('#rpg-settings-popup').show(); }
+            }).catch(() => {});
         };
         const clampPosition = (left, top) => {
             // Fall back to 40px (the FAB's CSS size) only if offsetWidth
@@ -2177,15 +2231,16 @@ async function initUI() {
                 label: 'Workshop',
                 iconClass: 'fa-solid fa-users-rectangle',
                 action: () => {
-                    // Prefer the decoupled event used by other surfaces;
-                    // fall back to a click on the settings entry button if
-                    // the listener hasn't been registered yet.
-                    try {
-                        window.dispatchEvent(new CustomEvent('dooms:open-roster'));
-                    } catch (e) {
-                        const $btn = $('#rpg-open-character-roster');
-                        if ($btn.length) $btn.trigger('click');
-                    }
+                    // The roster listener registers when the deferred settings
+                    // UI loads, so make sure that's done before dispatching.
+                    ensureSettingsUI().then(() => {
+                        try {
+                            window.dispatchEvent(new CustomEvent('dooms:open-roster'));
+                        } catch (e) {
+                            const $btn = $('#rpg-open-character-roster');
+                            if ($btn.length) $btn.trigger('click');
+                        }
+                    }).catch(() => {});
                 },
             });
             items.push({
@@ -2424,9 +2479,6 @@ async function initUI() {
         try { applyTheme(); } catch (_) { }
     }
     try { initBubbleTtsHandlers(); console.log('[Dooms Tracker] initBubbleTtsHandlers() OK'); } catch (e) { console.error('[Dooms Tracker] initBubbleTtsHandlers() FAILED:', e); }
-    try { setupSettingsPopup(); console.log('[Dooms Tracker] setupSettingsPopup() OK'); } catch (e) { console.error('[Dooms Tracker] setupSettingsPopup() FAILED:', e); }
-    try { initTrackerEditor(); console.log('[Dooms Tracker] initTrackerEditor() OK'); } catch (e) { console.error('[Dooms Tracker] initTrackerEditor() FAILED:', e); }
-    try { initPromptsEditor(); console.log('[Dooms Tracker] initPromptsEditor() OK'); } catch (e) { console.error('[Dooms Tracker] initPromptsEditor() FAILED:', e); }
     console.log('[Dooms Tracker] initUI() rendering complete');
 }
 /**
