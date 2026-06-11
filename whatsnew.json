@@ -1,7 +1,11 @@
 {
-    "version": "1.12.2",
+    "version": "1.12.3",
     "title": "The Rebuild",
     "items": [
+        {
+            "title": "New player experience + Restore Defaults",
+            "body": "Fresh installs now start with a curated setup: Scene Tracker, Present Characters, dialogue coloring, and Discord-style chat bubbles on — everything else off, with the D button centered. Existing setups are untouched. Want the clean slate? Advanced → Restore Default Settings (keeps all your characters, colors, avatars, and presets)."
+        },
         {
             "title": "This screen!",
             "body": "DES now shows release notes once after every update (desktop and desktop-site view). Dismissing lasts until the next release; turn it off permanently in Display settings. You can reopen it any time with the What's New button in the extensions dropdown."

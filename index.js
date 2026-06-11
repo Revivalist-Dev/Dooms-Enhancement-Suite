@@ -28,7 +28,8 @@ import {
     setInfoBoxContainer,
     setThoughtsContainer,
     setQuestsContainer,
-    clearSessionAvatarPrompts
+    clearSessionAvatarPrompts,
+    applyNewPlayerProfile
 } from './src/core/state.js';
 import { loadSettings, saveSettings, saveChatData, loadChatData, updateMessageSwipeData } from './src/core/persistence.js';
 import { registerAllEvents } from './src/core/events.js';
@@ -669,6 +670,20 @@ function bindSettingsUI() {
     $('#rpg-toggle-compact-prompts').on('change', function () {
         extensionSettings.compactPrompts = $(this).prop('checked');
         saveSettings();
+    });
+    $('#rpg-restore-defaults').on('click', async function () {
+        const confirmed = await callGenericPopup(
+            'Restore the default Doom\'s Enhancement Suite setup?<br><br>' +
+            '<b>On:</b> Scene Tracker, Present Characters, Dialogue Coloring, Discord chat bubbles, centered D button.<br>' +
+            '<b>Off:</b> everything else.<br><br>' +
+            'Your characters, colors, avatars, presets, and lorebook organization are kept. The page will reload.',
+            POPUP_TYPE.CONFIRM
+        );
+        if (confirmed !== POPUP_RESULT.AFFIRMATIVE) return;
+        applyNewPlayerProfile();
+        saveSettings();
+        toastr.success('Defaults restored — reloading...', "Doom's Enhancement Suite", { timeOut: 2000 });
+        setTimeout(() => location.reload(), 800);
     });
     $('#rpg-toggle-thoughts').on('change', function () {
         extensionSettings.showCharacterThoughts = $(this).prop('checked');
@@ -2251,6 +2266,17 @@ async function initUI() {
         };
         const applySavedPosition = () => {
             const pos = extensionSettings.fabPosition;
+            if (pos === 'center') {
+                // New-player default: centered on screen (drag to move;
+                // dragging stores concrete coords and replaces the sentinel).
+                const w = fabEl.offsetWidth || 40;
+                const h = fabEl.offsetHeight || 40;
+                fabEl.style.left = Math.round((window.innerWidth - w) / 2) + 'px';
+                fabEl.style.top = Math.round((window.innerHeight - h) / 2) + 'px';
+                fabEl.style.right = 'auto';
+                fabEl.style.bottom = 'auto';
+                return;
+            }
             if (pos && typeof pos.left === 'number' && typeof pos.top === 'number') {
                 const c = clampPosition(pos.left, pos.top);
                 fabEl.style.left = c.left + 'px';

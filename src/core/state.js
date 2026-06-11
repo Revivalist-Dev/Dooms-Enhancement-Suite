@@ -22,7 +22,7 @@ export let extensionSettings = {
     // NOTE: showUserStats and showInventory have been archived to src/archived/archived-features-userstats.js
     showInfoBox: true,
     showCharacterThoughts: true,
-    showQuests: true, // Show quests section
+    showQuests: false, // Show quests section (off in the new-player profile)
     showThoughtsInChat: false, // Show thoughts overlay in chat
     showPortraitBar: true, // Show collapsible portrait bar above chat input
     narratorMode: false, // Use character card as narrator instead of fixed character references
@@ -30,7 +30,7 @@ export let extensionSettings = {
     customContextInstructionsPrompt: '', // Custom context instructions prompt text (empty = use default)
     enableHtmlPrompt: false, // Enable immersive HTML prompt injection
     customHtmlPrompt: '', // Custom HTML prompt text (empty = use default)
-    enableDialogueColoring: false, // Enable dialogue coloring prompt injection
+    enableDialogueColoring: true, // Enable dialogue coloring prompt injection (on in the new-player profile)
     customDialogueColoringPrompt: '', // Custom dialogue coloring prompt text (empty = use default)
     customTrackerInstructionsPrompt: '', // Custom tracker instructions prompt (empty = use default)
     customTrackerContinuationPrompt: '', // Custom tracker continuation prompt (empty = use default)
@@ -134,6 +134,7 @@ export let extensionSettings = {
     },
     enableAnimations: true, // Enable smooth animations for content updates
     performanceMode: false, // Kill animations/blur/transitions + pause particles for minimum GPU/CPU cost
+    fabPosition: 'center', // 'center' = centered on screen (new-player default); {left, top} after user drags
     compactPrompts: true, // Use terser tracker instructions (~40% fewer tokens); set false to restore verbose v1 phrasing
     mobileQuickJumpEnabled: true, // Mobile-only floating button to jump back to your last sent message
     whatsNewSeenVersion: '', // Last extension version whose What's New screen was shown
@@ -291,7 +292,7 @@ export let extensionSettings = {
         showAbsentCharacters: true,  // Show greyed-out absent characters
         showScrollArrows: true,      // Show left/right scroll arrows on hover
     },
-    chatBubbleMode: 'off', // Chat bubble display mode: 'off', 'discord', or 'cards'
+    chatBubbleMode: 'discord', // Chat bubble display mode: 'off', 'discord', or 'cards' (discord in the new-player profile)
     infoPanelMode: 'off', // Info panel rendering in chat: 'off', 'banner', 'hud', 'ticker'
     chatBubbleSettings: {
         // Colors
@@ -373,7 +374,7 @@ export let extensionSettings = {
     },
     // Lorebook Manager - campaign grouping for World Info lorebooks
     lorebook: {
-        enabled: true,
+        enabled: false, // (off in the new-player profile)
         campaigns: {},          // uuid -> { id, name, icon, color, books: [WI filename strings] }
         campaignOrder: [],      // array of campaign UUIDs for display ordering
         collapsedCampaigns: [], // UUIDs of collapsed campaign groups (UI state)
@@ -420,6 +421,60 @@ export let extensionSettings = {
 /**
  * Last generated data from AI response
  */
+/**
+ * The "new player experience" — the curated out-of-box configuration.
+ * Fresh installs get this via the defaults above (KEEP THE TWO IN SYNC);
+ * existing installs are never touched by it, but can opt in via the
+ * "Restore Default Settings" button (Advanced section), which applies
+ * exactly this profile while leaving user data (characters, colors,
+ * avatars, presets, lorebook organization) intact.
+ *
+ * On: scene tracker, present characters (+ panel), dialogue coloring,
+ *     Discord-style chat bubbles, D button centered.
+ * Off: everything else.
+ */
+export const NEW_PLAYER_PROFILE = {
+    'showInfoBox': true,
+    'showCharacterThoughts': true,
+    'showPortraitBar': true,
+    'enableDialogueColoring': true,
+    'chatBubbleMode': 'discord',
+    'fabPosition': 'center',
+    'showQuests': false,
+    'showThoughtsInChat': false,
+    'narratorMode': false,
+    'enableHtmlPrompt': false,
+    'enableDynamicWeather': false,
+    'enableSnowflakes': false,
+    'autoGenerateAvatars': false,
+    'syncExpressionsToPresentCharacters': false,
+    'performanceMode': false,
+    'nameBan.enabled': false,
+    'historyPersistence.enabled': false,
+    'inlineBanners.enabled': false,
+    'doomCounter.enabled': false,
+    'lorebook.enabled': false,
+};
+
+/**
+ * Applies NEW_PLAYER_PROFILE onto the live settings. Dotted keys set
+ * nested fields in place, preserving the rest of the nested object
+ * (and all user data stores) untouched.
+ */
+export function applyNewPlayerProfile() {
+    for (const [path, value] of Object.entries(NEW_PLAYER_PROFILE)) {
+        const parts = path.split('.');
+        let target = extensionSettings;
+        for (let i = 0; i < parts.length - 1; i++) {
+            if (!target[parts[i]] || typeof target[parts[i]] !== 'object') {
+                target[parts[i]] = {};
+            }
+            target = target[parts[i]];
+        }
+        target[parts[parts.length - 1]] = value;
+    }
+}
+
 export let lastGeneratedData = {
     quests: null,
     infoBox: null,

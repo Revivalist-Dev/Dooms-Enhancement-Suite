@@ -100,6 +100,13 @@ Run the full list at every phase boundary. A phase is not done until every line 
 - [ ] Desktop tabs and strip widgets (clock/date/location) work
 
 ## New in the Rebuild (verify both states)
+- [ ] New player experience: a FRESH install starts with scene tracker,
+      present characters (+panel), dialogue coloring, and Discord bubbles ON,
+      D button centered, everything else OFF; an EXISTING install keeps its
+      setup exactly (including D position) after updating
+- [ ] Restore Default Settings (Advanced): confirm dialog -> applies the
+      new-player profile, KEEPS characters/colors/avatars/presets/lorebook
+      organization, reloads cleanly
 - [ ] What's New screen: shows AT LEAST ONCE after every update on desktop
       and phone "desktop site" mode (>=980px viewport), never in normal mobile
       view; manual "What's New" button in the extensions dropdown works on any

@@ -108,6 +108,12 @@ export function loadSettings() {
                 return;
             }
             updateExtensionSettings(savedSettings);
+            // fabPosition only exists in saved settings once the user drags
+            // the D button — the 'center' DEFAULT is for fresh installs only
+            // and must not leak into existing setups through the merge.
+            if (savedSettings.fabPosition === undefined) {
+                delete extensionSettings.fabPosition;
+            }
             // Perform settings migrations based on version
             const currentVersion = extensionSettings.settingsVersion || 1;
             let settingsChanged = false;
