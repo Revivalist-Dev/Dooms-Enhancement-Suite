@@ -90,7 +90,13 @@ globalThis.cancelAnimationFrame = () => {};
 
 try {
     await import(pathToFileURL(join(repoAt, 'index.js')).href);
-    console.log('LOAD OK — entire module graph linked and evaluated');
+    // index.js only statically reaches part of the tree — dynamic-only
+    // modules (deferred UI, whatsNew, lorebook cluster, ...) must be
+    // imported individually or their errors ship unseen.
+    for (const f of files) {
+        await import(pathToFileURL(join(repoAt, f)).href);
+    }
+    console.log(`LOAD OK — entire module graph linked and evaluated (${files.length} modules)`);
     process.exit(0);
 } catch (e) {
     console.error('LOAD FAILED:', e?.message);
