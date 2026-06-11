@@ -468,31 +468,52 @@ export function loadSettings() {
                 settingsChanged = true;
             }
 
-            // Performance mode (Rebuild): opt-in switch that strips DES
-            // animations, blur, and transitions and pauses canvas particles.
-            if (extensionSettings.performanceMode === undefined) {
-                extensionSettings.performanceMode = false;
-                settingsChanged = true;
-            }
+            // ── Rebuild guards: keys whose DEFAULT changed (or is new) on the
+            // Rebuild branch. CRITICAL: these must test savedSettings — the
+            // user's persisted blob — NOT extensionSettings, which after the
+            // shallow merge above always carries the state.js default and is
+            // therefore never undefined. (Audit finding: the merged-object
+            // form made every one of these guards dead code.)
+            // For each key absent from the saved blob, an EXISTING install
+            // keeps the behavior it had on main; only fresh installs get the
+            // new-player defaults from state.js.
 
-            // Compact tracker prompts (Rebuild): terser instruction text.
-            // Existing installs keep the verbose prompts their setups were
-            // tuned on; fresh installs get the compact default from state.js.
-            if (extensionSettings.compactPrompts === undefined) {
+            // Compact tracker prompts: existing installs keep the verbose
+            // prompts their setups were tuned on.
+            if (savedSettings.compactPrompts === undefined) {
                 extensionSettings.compactPrompts = false;
                 settingsChanged = true;
             }
 
-            // What's New screen (desktop, once per release, opt-out)
-            if (extensionSettings.whatsNewSeenVersion === undefined) {
-                extensionSettings.whatsNewSeenVersion = '';
+            // New-player profile flips — existing installs keep main's
+            // behavior for any key their blob doesn't carry (covers very old
+            // installs and blobs imported from the legacy extension keys).
+            if (savedSettings.showQuests === undefined) {
+                extensionSettings.showQuests = true;
                 settingsChanged = true;
             }
-            if (extensionSettings.whatsNewOptOut === undefined) {
-                // Fresh key on purpose: the old whatsNewDisabled could be set
-                // by an in-dialog button (removed — every update must show
-                // its notes at least once). Opt-out is now settings-only.
-                extensionSettings.whatsNewOptOut = false;
+            if (savedSettings.enableDialogueColoring === undefined) {
+                extensionSettings.enableDialogueColoring = false;
+                settingsChanged = true;
+            }
+            if (savedSettings.chatBubbleMode === undefined) {
+                extensionSettings.chatBubbleMode = 'off';
+                settingsChanged = true;
+            }
+            if (savedSettings.lorebook === undefined) {
+                // Lore Library was enabled-by-default on main; an existing
+                // install without the object must keep it on, not inherit
+                // the fresh-install default (off).
+                extensionSettings.lorebook.enabled = true;
+                settingsChanged = true;
+            }
+
+            // What's New: drop the retired interim-build key. Deliberately
+            // NOT carried into whatsNewOptOut — it was set by the removed
+            // in-dialog button, whose permanence was the bug. (Seen-version /
+            // performanceMode need no guard: their fresh defaults already
+            // match the desired existing-user state.)
+            if (extensionSettings.whatsNewDisabled !== undefined) {
                 delete extensionSettings.whatsNewDisabled;
                 settingsChanged = true;
             }

@@ -422,12 +422,16 @@ export let extensionSettings = {
  * Last generated data from AI response
  */
 /**
- * The "new player experience" — the curated out-of-box configuration.
- * Fresh installs get this via the defaults above (KEEP THE TWO IN SYNC);
- * existing installs are never touched by it, but can opt in via the
- * "Restore Default Settings" button (Advanced section), which applies
- * exactly this profile while leaving user data (characters, colors,
- * avatars, presets, lorebook organization) intact.
+ * The "new player experience" — the curated out-of-box configuration and
+ * the single source of truth for it: applyNewPlayerProfile() is invoked on
+ * the defaults at module init (below), so fresh installs get this profile
+ * BY CONSTRUCTION — editing a default above without updating the profile
+ * cannot desynchronize them. Existing installs are never touched by it
+ * (their saved settings override via the merge, with savedSettings-based
+ * guards in persistence.js), but can opt in via the "Restore Default
+ * Settings" button (Advanced), which applies exactly this profile while
+ * leaving user data (characters, colors, avatars, presets, lorebook
+ * organization) intact.
  *
  * On: scene tracker, present characters (+ panel), dialogue coloring,
  *     Discord-style chat bubbles, D button centered.
@@ -474,6 +478,9 @@ export function applyNewPlayerProfile() {
         target[parts[parts.length - 1]] = value;
     }
 }
+
+// Enforce the profile on the defaults mechanically (see doc above).
+applyNewPlayerProfile();
 
 export let lastGeneratedData = {
     quests: null,
