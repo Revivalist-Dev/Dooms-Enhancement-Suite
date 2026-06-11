@@ -64,7 +64,6 @@ export function clearBubbleState(mesText) {
     originalHtmlMap.delete(mesText);
     mesText.removeAttribute('data-dooms-bubbles-applied');
     mesText.removeAttribute('data-dooms-bubbles-style');
-    mesText.removeAttribute('data-dooms-original-html'); // legacy attribute
 }
 
 // ─────────────────────────────────────────────
@@ -180,17 +179,31 @@ export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
     const messageColorSet = new Set(messageColors);
     const ownedColors = new Set(Object.values(colors).filter(Boolean).map(c => String(c).toLowerCase()));
 
+    // Case-insensitive ownership: the model drifts name casing between turns
+    // ('Seraphina' vs 'seraphina'); an exact-key check would treat the
+    // re-cased name as a NEW colorless character and register a duplicate
+    // color under a second key. Resolve every name through the stored
+    // canonical casing.
+    const canonicalByLower = new Map(
+        Object.keys(colors).map(k => [k.toLowerCase(), k])
+    );
+    const hasColor = (name) => {
+        const canonical = canonicalByLower.get(String(name).toLowerCase());
+        return canonical !== undefined && !!colors[canonical];
+    };
+
     const colorlessNames = () => {
         const out = [];
         for (const entry of presentChars) {
             const name = entry && entry.name;
-            if (name && typeof name === 'string' && !colors[name]) out.push(name);
+            if (name && typeof name === 'string' && !hasColor(name)) out.push(name);
         }
         return out;
     };
     const unownedColors = () => messageColors.filter(c => !ownedColors.has(c));
     const register = (name, color, how) => {
         colors[name] = color;
+        canonicalByLower.set(String(name).toLowerCase(), name);
         ownedColors.add(color);
         registered.push(`${name} → ${color} (${how})`);
     };
@@ -198,7 +211,7 @@ export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
     // ── 1. VALIDATED JSON ──
     for (const entry of presentChars) {
         const name = entry && entry.name;
-        if (!name || typeof name !== 'string' || colors[name]) continue;
+        if (!name || typeof name !== 'string' || hasColor(name)) continue;
         const proposed = typeof entry.color === 'string' ? entry.color.trim().toLowerCase() : '';
         if (!HEX_RE.test(proposed)) continue;
         if (!messageColorSet.has(proposed)) continue;  // claim doesn't match the message — discard
@@ -220,8 +233,8 @@ export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
         const names = colorlessNames();
         if (names.length > 0 && typeof messageText === 'string') {
             for (const color of unownedColors()) {
-                const best = _bestAdjacentName(messageText, color, names.filter(n => !colors[n]));
-                if (best && !colors[best]) register(best, color, 'adjacency');
+                const best = _bestAdjacentName(messageText, color, names.filter(n => !hasColor(n)));
+                if (best && !hasColor(best)) register(best, color, 'adjacency');
             }
         }
     }
@@ -246,7 +259,11 @@ export function harvestNewSpeakerColors(messageText, characterThoughtsData) {
  */
 function _bestAdjacentName(messageText, color, candidateNames) {
     if (!candidateNames || candidateNames.length === 0) return null;
-    if (candidateNames.length === 1) return candidateNames[0];
+    // NOTE: no single-candidate shortcut. With ONE colorless character but
+    // SEVERAL unowned colors (e.g. an untracked one-off NPC also speaking),
+    // returning the lone candidate without evidence binds them to whichever
+    // color the loop reaches first. Even a single candidate must score
+    // adjacency > 0 near THIS color's segments to be registered.
 
     const WINDOW = 200;
     const NEAR = 60;
@@ -428,6 +445,26 @@ function parseMessageIntoBubbles(mesText) {
     const colorMap = buildColorToSpeakerMap();
     const nameLookup = buildNameLookup();
     _attribCtx = buildAttributionContext();
+    // Which font hexes actually appear in THIS message — the allowed()
+    // constraint only excludes a character when their reserved color is in
+    // live use here; a stored color that isn't even present (e.g. a palette
+    // auto-assign) must not disqualify them from narration matching.
+    _attribCtx.messageColors = new Set(
+        [...mesText.querySelectorAll('font[color]')]
+            .map(f => String(f.getAttribute('color') || '').toLowerCase())
+            .filter(c => /^#[0-9a-f]{6}$/.test(c))
+    );
+    // Elimination + persistence only make sense for the LATEST message —
+    // historical messages are re-parsed with TODAY'S roster (chat change,
+    // style switch, lazy off-screen application), and eliminating against
+    // the current scene would bind an old one-off speaker's color to
+    // whichever character happens to be colorless now, then persist it.
+    {
+        const mesEl = mesText.closest && mesText.closest('.mes');
+        const mesId = mesEl ? parseInt(mesEl.getAttribute('mesid'), 10) : NaN;
+        _attribCtx.isLatest = Number.isFinite(mesId) &&
+            Array.isArray(chat) && mesId === chat.length - 1;
+    }
     // Track colours resolved during this message so repeated dialogue by the
     // same character is correctly attributed even when narration in between
     // doesn't mention the character's name.
@@ -450,29 +487,34 @@ function parseMessageIntoBubbles(mesText) {
     // bubble, visible border). Without this, a multi-paragraph narrator passage
     // collapses into a single visual bubble even though the parser emits one
     // segment per paragraph.
-    let blockIdx = 0;
-    for (const block of blocks) {
-        const segs = parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors, allSegments);
-        for (const s of segs) s._block = blockIdx;
-        allSegments.push(...segs);
-        blockIdx++;
-    }
+    try {
+        let blockIdx = 0;
+        for (const block of blocks) {
+            const segs = parseBlockIntoSegments(block, colorMap, nameLookup, resolvedColors, allSegments);
+            for (const s of segs) s._block = blockIdx;
+            allSegments.push(...segs);
+            blockIdx++;
+        }
 
-    // Persist any color → name pairs that elimination resolved during this
-    // parse (high-confidence: there was exactly one possible speaker), so
-    // the mapping survives into future messages and the next generation's
-    // reserved-colors list. Fuzzy narration matches are NOT persisted.
-    if (_attribCtx && _attribCtx.newlyResolved.size > 0) {
-        const colors = getActiveCharacterColors() || {};
-        let wrote = false;
-        for (const [color, name] of _attribCtx.newlyResolved) {
-            if (!colors[name]) { colors[name] = color; wrote = true; }
+        // Persist any color → name pairs that elimination resolved during this
+        // parse (high-confidence: there was exactly one possible speaker), so
+        // the mapping survives into future messages and the next generation's
+        // reserved-colors list. Fuzzy narration matches are NOT persisted.
+        if (_attribCtx && _attribCtx.newlyResolved.size > 0) {
+            const colors = getActiveCharacterColors() || {};
+            let wrote = false;
+            for (const [color, name] of _attribCtx.newlyResolved) {
+                if (!colors[name]) { colors[name] = color; wrote = true; }
+            }
+            if (wrote) {
+                try { saveCharacterRosterChange(); } catch (e) { /* non-fatal */ }
+            }
         }
-        if (wrote) {
-            try { saveCharacterRosterChange(); } catch (e) { /* non-fatal */ }
-        }
+    } finally {
+        // Always clear — a throw mid-parse must not leak this message's
+        // constraints into the next message's attribution.
+        _attribCtx = null;
     }
-    _attribCtx = null;
 
     return mergeConsecutiveNarration(allSegments);
 }
@@ -710,14 +752,28 @@ function detectSpeaker(fontColor, precedingText, blockElement, colorMap, nameLoo
     const allowed = (name) => {
         if (!fontColor || !_attribCtx) return true;
         const owned = _attribCtx.nameColors.get(String(name).toLowerCase());
-        return !owned || owned.size === 0 || owned.has(fontColor.toLowerCase());
+        if (!owned || owned.size === 0 || owned.has(fontColor.toLowerCase())) return true;
+        // Exclusion is only justified when the character's reserved color is
+        // actually IN USE in this message (they're being voiced elsewhere in
+        // their own color, so this other color can't be them). A stored color
+        // that doesn't appear here at all — e.g. the portrait bar's palette
+        // auto-assign for a brand-new character — must not disqualify them,
+        // or new characters become permanently "Unknown".
+        const inUse = _attribCtx.messageColors
+            ? [...owned].some(c => _attribCtx.messageColors.has(c))
+            : true;
+        return !inUse;
     };
 
     // Strategy 2.5: Elimination — if exactly one present character has no
     // stored color (and hasn't already claimed a different color in this
     // message), an unknown color can only be theirs. Deterministic; also
     // recorded for persistence so the mapping sticks for future messages.
-    if (fontColor && _attribCtx) {
+    // LATEST MESSAGE ONLY: historical messages are re-parsed with today's
+    // roster (chat change / style switch / lazy application), and eliminating
+    // an old one-off speaker's color against whoever is colorless NOW would
+    // persist a wrong pair into the permanent store.
+    if (fontColor && _attribCtx && _attribCtx.isLatest) {
         const normalised = fontColor.toLowerCase();
         const claimed = new Set(
             [...resolvedColors.values()].map(n => String(n).toLowerCase())

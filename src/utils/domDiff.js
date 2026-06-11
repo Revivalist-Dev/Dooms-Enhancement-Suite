@@ -29,15 +29,27 @@ export function keyedReconcile(container, items, { key, create, update, onEnter,
     const existing = new Map();
     for (const child of [...container.children]) {
         const k = child.getAttribute('data-reconcile-key');
-        if (k !== null) existing.set(k, child);
+        if (k === null) continue;
+        if (existing.has(k)) {
+            // Duplicate-keyed child (e.g. the tracker listed one name twice
+            // on a previous render): keep the first, discard the extra —
+            // otherwise the overwritten entry is never matched OR removed
+            // and leaks one orphan node per render.
+            if (onExit) onExit(child); else child.remove();
+            continue;
+        }
+        existing.set(k, child);
     }
 
     const created = [];
     let removed = 0;
     let cursor = container.firstElementChild;
+    const seenKeys = new Set();
 
     for (const item of items) {
         const k = String(key(item));
+        if (seenKeys.has(k)) continue; // duplicate data item — first wins
+        seenKeys.add(k);
         let el = existing.get(k);
         if (el) {
             existing.delete(k);

@@ -293,7 +293,11 @@ export function recordPortraitFire(name, dataUrl, msgIdx) {
     pendingPortraitAttachments.delete(safeName.toLowerCase());
     _queuedFiredAttachments.push({
         name: safeName,
-        dataUrl: url,
+        // The rolling generation log survives for 25 generations — retaining
+        // the full base64 image (hundreds of KB each) there held tens of MB
+        // for a debug surface. Keep a clipped preview + byteLength; the LIVE
+        // pending map (above) still holds the full dataUrl while armed.
+        dataUrl: url.length > 256 ? `${url.slice(0, 256)}… [+${url.length - 256} chars]` : url,
         byteLength: dataUrlByteLength(url),
         msgIdx: typeof msgIdx === 'number' ? msgIdx : null,
         timestamp: Date.now(),

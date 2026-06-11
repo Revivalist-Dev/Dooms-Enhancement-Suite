@@ -426,26 +426,43 @@ function injectSceneTransitions() {
         (_transitionsState.style !== style || chat.length < _transitionsState.chatLength)) {
         _transitionsState = null;
     }
+
+    let $messages = $('#chat .mes[is_system="false"]');
+    if (!$messages.length) return;
+
+    // SillyTavern lazily renders older messages ("Load more"/scroll-up
+    // backfill) WITHOUT firing any event DES listens to, and chat.length
+    // doesn't change (the array was always complete — only the DOM grows
+    // upward). If the first rendered message is now older than the start of
+    // the last pass, force a full re-walk so backfilled messages get their
+    // transition cards too.
+    if (_transitionsState) {
+        const firstDomId = parseInt($messages.first().attr('mesid'), 10);
+        if (Number.isFinite(firstDomId) && firstDomId < _transitionsState.firstProcessed) {
+            _transitionsState = null;
+        }
+    }
+
     const fullPass = !_transitionsState;
     if (fullPass) {
         // Remove old transition cards first (idempotent)
         $('.dooms-scene-transition').remove();
-        _transitionsState = { processedUpTo: -1, prevLocation: '', prevTime: '', chatLength: 0, style };
+        _transitionsState = { processedUpTo: -1, firstProcessed: Infinity, prevLocation: '', prevTime: '', chatLength: 0, style };
     }
     const startAfter = _transitionsState.processedUpTo;
-
-    const $messages = $('#chat .mes[is_system="false"]');
-    if (!$messages.length) return;
+    const priorFirst = _transitionsState.firstProcessed;
 
     let prevLocation = _transitionsState.prevLocation;
     let prevTime = _transitionsState.prevTime;
     let maxProcessed = startAfter;
+    let minProcessed = priorFirst;
 
     $messages.each(function () {
         const $mes = $(this);
         const mesId = parseInt($mes.attr('mesid'), 10);
         if (isNaN(mesId) || mesId <= startAfter) return;
         if (mesId > maxProcessed) maxProcessed = mesId;
+        if (mesId < minProcessed) minProcessed = mesId;
 
         const message = chat[mesId];
         if (!message || message.is_user || message.is_system) return;
@@ -484,6 +501,7 @@ function injectSceneTransitions() {
     // Record end state so the next call can continue incrementally
     _transitionsState = {
         processedUpTo: maxProcessed,
+        firstProcessed: minProcessed,
         prevLocation,
         prevTime,
         chatLength: chat.length,
