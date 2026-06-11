@@ -5,6 +5,12 @@ name: Create usage-ping release
 
 on:
   workflow_dispatch:
+  # Also fires when this file itself changes on main — lets the release be
+  # created by a push when nobody can reach the Actions tab (idempotent:
+  # the job no-ops if the release already exists).
+  push:
+    branches: [main]
+    paths: ['.github/workflows/usage-ping-release.yml']
 
 permissions:
   contents: write
