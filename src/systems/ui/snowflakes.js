@@ -17,13 +17,19 @@ let snowEngine = null;
  */
 function createSnowflakes() {
     if (snowflakesContainer) return; // Already created
-    ensureCss('weather'); // container z-index/positioning styles
-    snowflakesContainer = document.createElement('div');
-    snowflakesContainer.className = 'rpg-snowflakes-container';
-    document.body.appendChild(snowflakesContainer);
-    snowEngine = createParticleEngine();
-    snowEngine.mount(snowflakesContainer);
-    snowEngine.setEffects({ snow: { count: 50 } });
+    // Build only after the container's z-index/positioning styles exist —
+    // an unstyled container forms no stacking context and the fixed canvas
+    // would escape to the root. On CSS failure, skip; toggle retries.
+    ensureCss('weather').then(() => {
+        if (snowflakesContainer) return;                       // double-call guard
+        if (!extensionSettings.enableSnowflakes) return;       // toggled off meanwhile
+        snowflakesContainer = document.createElement('div');
+        snowflakesContainer.className = 'rpg-snowflakes-container';
+        document.body.appendChild(snowflakesContainer);
+        snowEngine = createParticleEngine();
+        snowEngine.mount(snowflakesContainer);
+        snowEngine.setEffects({ snow: { count: 50 } });
+    }).catch(() => { /* css failed — next toggle retries */ });
 }
 
 /**

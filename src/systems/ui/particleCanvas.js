@@ -175,20 +175,25 @@ const EFFECTS = {
 
     stars: {
         defaultCount: 60,
-        spawn(w, h) {
+        // cfg options: band (fraction of viewport height stars occupy,
+        // default 0.6) and maxOpacity (cap, default 1) — dawn uses faint
+        // remnants near the top (band 0.4, cap ~0.45) and dusk dimmer
+        // emerging stars, matching the old CSS variants.
+        spawn(w, h, initial, index, cfg) {
             return {
                 x: rand(0, w),
-                y: rand(0, h * 0.6),                 // stars in upper portion
+                y: rand(0, h * ((cfg && cfg.band) || 0.6)), // stars in upper portion
                 size: rand(1, 3),
                 phase: rand(0, TAU),
                 period: rand(2, 5),
                 bright: Math.random() < 0.12,        // ~1 in 8 is a bright star
+                maxOpacity: (cfg && cfg.maxOpacity) || 1,
                 t: 0,
             };
         },
         step(p, dt) { p.t += dt; },
         draw(ctx, p) {
-            const twinkle = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin((p.t / p.period) * TAU + p.phase));
+            const twinkle = (0.3 + 0.7 * (0.5 + 0.5 * Math.sin((p.t / p.period) * TAU + p.phase))) * (p.maxOpacity || 1);
             const r = p.size * (1 + 0.3 * twinkle) * (p.bright ? 1.8 : 1);
             const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 2);
             grad.addColorStop(0, `rgba(255,255,255,${twinkle})`);
@@ -321,10 +326,21 @@ class ParticleEngine {
         this.raf = null;
         this.lastTs = 0;
         this._onVisibility = () => this._sync();
-        this._onResize = () => this._resize();
+        this._onPerfMode = () => this._sync();
+        // Debounced: an interactive drag-resize fires per frame, and each
+        // _resize() reallocates the canvas backing buffer + respawns pools.
+        this._resizeTimer = null;
+        this._onResize = () => {
+            clearTimeout(this._resizeTimer);
+            this._resizeTimer = setTimeout(() => this._resize(), 150);
+        };
         this._reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
         this._onMotionPref = () => this._sync();
         document.addEventListener('visibilitychange', this._onVisibility);
+        // Dispatched by applyPerformanceMode() — the engine must re-evaluate
+        // _shouldRun() when perf mode toggles OFF, or the loop stays stopped
+        // until the next visibility/resize/effect change.
+        window.addEventListener('dooms:perf-mode-changed', this._onPerfMode);
         window.addEventListener('resize', this._onResize);
         if (this._reducedMotion.addEventListener) {
             this._reducedMotion.addEventListener('change', this._onMotionPref);
@@ -376,7 +392,7 @@ class ParticleEngine {
             if (!pool || pool.length !== count) {
                 pool = [];
                 for (let i = 0; i < count; i++) {
-                    pool.push(effect.spawn(this.width, this.height, true, i));
+                    pool.push(effect.spawn(this.width, this.height, true, i, cfg));
                 }
                 this.pools.set(name, pool);
             }
@@ -418,10 +434,15 @@ class ParticleEngine {
         ctx.clearRect(0, 0, w, h);
         for (const [name, pool] of this.pools) {
             const effect = EFFECTS[name];
+            // opacityScale: foreground-mode dimming — the old CSS dimmed
+            // foreground stars/fireflies to keep chat text readable.
+            const scale = (this.active[name] && this.active[name].opacityScale) || 1;
+            ctx.globalAlpha = scale;
             for (const p of pool) {
                 effect.step(p, dt, w, h);
                 effect.draw(ctx, p, w, h);
             }
+            ctx.globalAlpha = 1;
         }
         this.raf = requestAnimationFrame((t) => this._tick(t));
     }
@@ -430,7 +451,9 @@ class ParticleEngine {
     destroy() {
         this.setEffects(null);
         document.removeEventListener('visibilitychange', this._onVisibility);
+        window.removeEventListener('dooms:perf-mode-changed', this._onPerfMode);
         window.removeEventListener('resize', this._onResize);
+        clearTimeout(this._resizeTimer);
         if (this._reducedMotion.removeEventListener) {
             this._reducedMotion.removeEventListener('change', this._onMotionPref);
         }

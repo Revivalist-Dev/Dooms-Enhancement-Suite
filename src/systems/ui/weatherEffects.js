@@ -544,9 +544,6 @@ export function updateWeatherEffect() {
         removeWeatherEffect();
         return;
     }
-    // Overlay styles are split out of style.css; idempotent after first call.
-    ensureCss('weather');
-
     const weather = getCurrentWeather();
     const weatherType = parseWeatherType(weather);
 
@@ -580,8 +577,20 @@ export function updateWeatherEffect() {
     currentTimeOfDay = timeOfDay;
     currentHour = hour;
 
-    // Canvas effect plan + optional DOM overlay container per weather type
+    // Foreground mode paints particles OVER the chat — the old CSS dimmed
+    // foreground stars/fireflies to keep text readable; opacityScale carries
+    // that invariant onto the canvas.
+    const fg = !!extensionSettings.weatherForeground;
+    const dim = (scale) => (fg ? scale : 1);
+
+    // Canvas effect plan + optional DOM overlay builder per weather type.
+    // The DOM build is DEFERRED until styles/weather.css has loaded: before
+    // that, .rpg-weather-particles has no position/z-index, so the container
+    // forms no stacking context, the fixed canvas escapes to the root (and
+    // can paint over chat even in background mode), and overlays render
+    // unstyled.
     let canvasEffects = null;
+    let buildOverlays = null;
     switch (weatherType) {
         case 'snow':
             canvasEffects = { snow: { count: 50 } };
@@ -595,16 +604,28 @@ export function updateWeatherEffect() {
         case 'sunny':
             // Use appropriate effect based on time of day
             if (timeOfDay === 'night') {
-                weatherContainer = createNighttime(hour);
-                canvasEffects = { stars: { count: 68 }, fireflies: { count: 15 } };
+                buildOverlays = () => createNighttime(hour);
+                canvasEffects = {
+                    stars: { count: 68, opacityScale: dim(0.5) },
+                    fireflies: { count: 15, opacityScale: dim(0.6) },
+                };
             } else if (timeOfDay === 'dawn') {
-                weatherContainer = createSunrise(hour);
-                canvasEffects = { stars: { count: 15 }, dustMotes: { count: 12 } };
+                buildOverlays = () => createSunrise(hour);
+                // Faint star remnants near the top of the dawn sky (the old
+                // .rpg-sunrise-fading-star: opacity-capped, top 40dvh)
+                canvasEffects = {
+                    stars: { count: 15, maxOpacity: 0.45, band: 0.4, opacityScale: dim(0.5) },
+                    dustMotes: { count: 12 },
+                };
             } else if (timeOfDay === 'dusk') {
-                weatherContainer = createSunset(hour);
-                canvasEffects = { stars: { count: 20 }, dustMotes: { count: 12 } };
+                buildOverlays = () => createSunset(hour);
+                // Dim emerging stars (the old .rpg-sunset-emerging-star)
+                canvasEffects = {
+                    stars: { count: 20, maxOpacity: 0.8, band: 0.5, opacityScale: dim(0.5) },
+                    dustMotes: { count: 12 },
+                };
             } else {
-                weatherContainer = createSunshine(hour);
+                buildOverlays = () => createSunshine(hour);
                 canvasEffects = { dustMotes: { count: 25 }, lightOrbs: { count: 6 } };
             }
             break;
@@ -613,7 +634,7 @@ export function updateWeatherEffect() {
             break;
         case 'storm':
             // Storm = Rain + Lightning (lightning flash stays a DOM overlay)
-            weatherContainer = createLightning();
+            buildOverlays = () => createLightning();
             canvasEffects = { rain: { count: 100 } };
             break;
         case 'blizzard':
@@ -622,32 +643,45 @@ export function updateWeatherEffect() {
             break;
     }
 
-    if (canvasEffects) {
-        // Effects with no DOM overlays still need a container for stacking
-        if (!weatherContainer) {
-            weatherContainer = document.createElement('div');
-            weatherContainer.className = 'rpg-weather-particles';
-        }
+    if (!canvasEffects) return;
+
+    // Stale-token guard: if the weather changes again before the CSS
+    // resolves, the older build silently aborts.
+    const token = ++_buildToken;
+    ensureCss('weather').then(() => {
+        if (token !== _buildToken) return;                       // superseded
+        if (!extensionSettings.enableDynamicWeather) return;      // toggled off meanwhile
+        if (weatherContainer) return;                             // already built
+
+        const container = buildOverlays ? buildOverlays() : null;
+        const el = container || document.createElement('div');
+        if (!container) el.className = 'rpg-weather-particles';
 
         // Apply z-index based on background/foreground settings
         if (extensionSettings.weatherForeground) {
-            weatherContainer.style.zIndex = '9998'; // In front of chat
-            weatherContainer.classList.add('rpg-weather-foreground');
+            el.style.zIndex = '9998'; // In front of chat
+            el.classList.add('rpg-weather-foreground');
         } else if (extensionSettings.weatherBackground) {
-            weatherContainer.style.zIndex = '1'; // Behind chat (default)
-            weatherContainer.classList.remove('rpg-weather-foreground');
+            el.style.zIndex = '1'; // Behind chat (default)
+            el.classList.remove('rpg-weather-foreground');
         } else {
             // Both disabled - don't show weather
-            weatherContainer = null;
             return;
         }
 
+        weatherContainer = el;
         document.body.appendChild(weatherContainer);
         const engine = getParticleEngine();
         engine.mount(weatherContainer);
         engine.setEffects(canvasEffects);
-    }
+    }).catch(() => {
+        // weather.css failed to load — skip this build rather than paint an
+        // unstyled overlay; the next weather update retries the fetch.
+    });
 }
+
+/** Monotonic token canceling superseded deferred weather builds. */
+let _buildToken = 0;
 
 let _visibilityHandlerBound = false;
 
